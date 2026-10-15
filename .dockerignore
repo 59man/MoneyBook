@@ -1,0 +1,16 @@
+.git
+.claude
+.repowise
+.vscode
+reference
+android
+docs
+**/build
+**/.gradle
+**/.kotlin
+deploy/.env
+deploy/backups
+*.xlsx
+*.xls
+*.zip
+.env

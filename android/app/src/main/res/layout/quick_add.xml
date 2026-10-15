@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageView android:id="@+id/qa_open" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+        android:contentDescription="Open MoneyBook" android:scaleType="center" android:src="@drawable/ic_wallet" android:tint="#757575" />
+    <ImageView android:id="@+id/qa_search" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+        android:contentDescription="Search" android:scaleType="center" android:src="@drawable/ic_search" android:tint="#757575" />
+    <ImageView android:id="@+id/qa_bookmarks" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+        android:contentDescription="Bookmarks" android:scaleType="center" android:src="@drawable/ic_star" android:tint="#757575" />
+    <ImageView android:id="@+id/qa_add" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+        android:contentDescription="Add" android:scaleType="center" android:src="@drawable/ic_add" android:tint="#757575" />
+</LinearLayout>

@@ -1,0 +1,152 @@
+package com.moneybook.ui.theme
+
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
+
+/** Color tokens from docs/ui-spec.md ("Color tokens"). Screens use only these. */
+@Immutable
+data class MbColors(
+    val accent: Color,
+    val income: Color,
+    val expense: Color,
+    val incomeFaded: Color,
+    val expenseFaded: Color,
+    /** Destructive actions (delete, reset). Red in both color sets: Set. B only swaps income and expense. */
+    val danger: Color,
+    val textPrimary: Color,
+    val textBody: Color,
+    val textSecondary: Color,
+    val textTertiary: Color,
+    val tabUnselected: Color,
+    val navUnselected: Color,
+    val iconMuted: Color,
+    val surface: Color,
+    val background: Color,
+    val navBackground: Color,
+    val divider: Color,
+    val segmentBackground: Color,
+    val segmentBorder: Color,
+    val weekdayChip: Color,
+    val saturday: Color,
+    val sundayHeader: Color,
+    val sunday: Color,
+    val dayOutside: Color,
+    val today: Color,
+    val todayText: Color,
+    val currentWeek: Color,
+    val keypadHeader: Color,
+    val keypadHeaderText: Color,
+    /** The amount keypad's currency strip, and its selected currency (measured on Realbyte's light theme). */
+    val keypadStrip: Color = Color(0xFF3F4671),
+    val keypadStripSelected: Color = Color(0xFF23294E),
+    /** The ✕ on a form thumbnail: black_op_50 (notes-extras.md §2, remove_photo_btn_*). */
+    val photoRemoveScrim: Color = Color(0x80000000),
+    /** The photo viewer's top bar (black_op_80) and its inactive page dots (white_op_50). */
+    val photoViewerBar: Color = Color(0xCC000000),
+    val photoViewerDot: Color = Color(0x80FFFFFF),
+    val secondaryFab: Color,
+    /** Pie slices and % chips, in this order, repeating after the last. */
+    val chartPalette: List<Color>,
+    val incomeBar: Color,
+    val expenseBar: Color,
+    /** Trans filter panel: the navy top bar, the darker band below it and the two rings. */
+    val filterBar: Color,
+    val filterBand: Color,
+    val ringIncome: Color,
+    val ringExpense: Color,
+    val searchField: Color,
+    /** Trans → Total's budget bars (Realbyte blue / red), the Today line in each bar and the Today bubble. */
+    val budgetBar: Color = Color(0xFF58A6FF),
+    /** Budget detail's spending bars, sampled from Realbyte's chart. */
+    val budgetChartBar: Color = Color(0xFF1F88FF),
+    val budgetOver: Color = Color(0xFFFF796E),
+    val budgetTodayLine: Color = Color(0xFFD5D5D5),
+    val todayBubble: Color = Color(0xFF8D8D8D),
+    /** The two-pane category picker's selected parent, sampled from Realbyte (light). */
+    val pickerSelected: Color,
+    val isDark: Boolean,
+)
+
+val LightMbColors = MbColors(
+    accent = Color(0xFFFF6255),
+    income = Color(0xFF1F88FF),
+    expense = Color(0xFFFF603B),
+    incomeFaded = Color(0xFF8DC0FF),
+    expenseFaded = Color(0xFFFBAB9B),
+    danger = Color(0xFFFF603B),
+    textPrimary = Color(0xFF000000),
+    textBody = Color(0xFF4B4B4B),
+    textSecondary = Color(0xFF8D8D8D),
+    textTertiary = Color(0xFF7B7B7B),
+    tabUnselected = Color(0xFFA2A2A2),
+    navUnselected = Color(0xFF9C9C9C),
+    iconMuted = Color(0xFF9C9C9C),
+    surface = Color(0xFFFFFFFF),
+    background = Color(0xFFF7F7FA),
+    navBackground = Color(0xFFF7F7FB),
+    divider = Color(0xFFD5D5D5),
+    segmentBackground = Color(0xFFF5F5F5),
+    segmentBorder = Color(0xFFDBDBDB),
+    weekdayChip = Color(0xFF8D8D8D),
+    saturday = Color(0xFF58A6FF),
+    sundayHeader = Color(0xFFFF796E),
+    sunday = Color(0xFFFF603B),
+    dayOutside = Color(0xFF717173),
+    today = Color(0xFF3F4671),
+    todayText = Color(0xFFFFFFFF),
+    currentWeek = Color(0xFFFFF1ED),
+    keypadHeader = Color(0xFF000000),
+    keypadHeaderText = Color(0xFFFFFFFF),
+    secondaryFab = Color(0xFFFDFDFD),
+    chartPalette = listOf(
+        Color(0xFFFD6E63), Color(0xFFFF9750), Color(0xFFFED042), Color(0xFFFEE700), Color(0xFFC1E746), Color(0xFF72D36C),
+        Color(0xFF66E9DB), Color(0xFF72B8E3), Color(0xFFA588D6), Color(0xFFED7DDC), Color(0xFFE373A2),
+    ),
+    incomeBar = Color(0xFF9EC8FB),
+    expenseBar = Color(0xFFF8B8AC),
+    filterBar = Color(0xFF3F4671),
+    filterBand = Color(0xFF23294E),
+    ringIncome = Color(0xFF8FC3FF),
+    ringExpense = Color(0xFFFFAF9D),
+    searchField = Color(0xFFF2F2F4),
+    pickerSelected = Color(0xFFFFF1ED),
+    isDark = false,
+)
+
+/**
+ * Sampled on the phone from reference/screens/47-52 (dark captures).
+ * incomeFaded, currentWeek and iconMuted are estimates: no dark capture shows them.
+ */
+val DarkMbColors = LightMbColors.copy(
+    income = Color(0xFF52A2FF),
+    expense = Color(0xFFFD5F59),
+    incomeFaded = Color(0xFF345378),
+    expenseFaded = Color(0xFF7D3736),
+    danger = Color(0xFFFD5F59),
+    textPrimary = Color(0xFFFFFFFF),
+    textBody = Color(0xFFFAFAFA),
+    textSecondary = Color(0xFF767676),
+    textTertiary = Color(0xFFABADB2),
+    tabUnselected = Color(0xFF7D7F84),
+    navUnselected = Color(0xFF707172),
+    iconMuted = Color(0xFF707172),
+    surface = Color(0xFF26282E),
+    background = Color(0xFF212226),
+    navBackground = Color(0xFF1F2022),
+    divider = Color(0xFF42434B),
+    segmentBackground = Color(0xFF181819),
+    segmentBorder = Color(0xFF343639),
+    weekdayChip = Color(0xFF767676),
+    sunday = Color(0xFFFD5F59),
+    dayOutside = Color(0xFFBDBDBE),
+    today = Color(0xFFFFFFFF),
+    todayText = Color(0xFF26282E),
+    currentWeek = Color(0xFF3A2F2E),
+    keypadHeader = Color(0xFF7D7F84),
+    keypadHeaderText = Color(0xFF26282E),
+    secondaryFab = Color(0xFF383A40),
+    budgetTodayLine = Color(0xFF42434B),
+    todayBubble = Color(0xFF767676),
+    pickerSelected = Color(0xFF3A2422),
+    isDark = true,
+)

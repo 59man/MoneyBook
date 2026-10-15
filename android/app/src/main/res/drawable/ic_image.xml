@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A solid picture glyph (frame, sun and two hills cut out), drawn to the 12.2 x 8.8 dp of Realbyte's day-row photo icon on realbyte_34. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="12.2dp"
+    android:height="8.8dp"
+    android:viewportWidth="32"
+    android:viewportHeight="23">
+    <path android:fillColor="#FF000000" android:fillType="evenOdd"
+        android:pathData="M1.5,0H30.5Q32,0 32,1.5V21.5Q32,23 30.5,23H1.5Q0,23 0,21.5V1.5Q0,0 1.5,0Z M4,6.5a2.5,2.5 0 1,0 5,0a2.5,2.5 0 1,0 -5,0Z M4,19L4,16.5L9.5,11.5L13,15L21,6.5L28,14.5L28,19Z" />
+</vector>

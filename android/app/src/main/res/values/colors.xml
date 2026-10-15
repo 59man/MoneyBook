@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFFF6255</color>
+    <color name="window_light">#FFFFFFFF</color>
+    <color name="window_dark">#FF26282E</color>
+    <!-- Widget preview layouts (RemoteViews XML can't read ui/theme); keep in step with ui/theme/Widget.kt. -->
+    <color name="widget_tab_on">#FFFF603B</color>
+    <color name="widget_tab_off">#FF7F7F7F</color>
+    <color name="widget_line">#FFD9D9D9</color>
+    <color name="widget_good">#FF20BE00</color>
+    <color name="widget_muted">#FF666666</color>
+    <color name="widget_red_panel">#FFF2443E</color>
+    <color name="widget_red_tile">#FFF4605B</color>
+    <color name="widget_white_border">#FFE6E6E6</color>
+</resources>

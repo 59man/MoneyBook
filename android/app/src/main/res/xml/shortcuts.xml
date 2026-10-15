@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_add"
+        android:shortcutId="add"
+        android:shortcutLongLabel="@string/shortcut_add_long"
+        android:shortcutShortLabel="@string/shortcut_add_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moneybook://open/add"
+            android:targetClass="com.moneybook.MainActivity"
+            android:targetPackage="com.moneybook">
+            <extra android:name="open" android:value="add" />
+        </intent>
+    </shortcut>
+</shortcuts>

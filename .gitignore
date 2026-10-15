@@ -1,0 +1,41 @@
+# Personal financial data: adb captures of the real app and Excel exports
+reference/
+
+# Secrets
+.env
+deploy/.env
+
+# Build outputs
+.gradle/
+build/
+**/build/
+local.properties
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Server backups
+deploy/backups/
+
+# Personal spreadsheets and MoneyBook backups dropped in repo root (real financial data)
+/*.xls
+/*.xlsx
+/*.zip
+
+# Kotlin compiler session files
+.kotlin/
+
+# Local-only developer notes (specs, plans, measured UI notes)
+docs/superpowers/
+docs/ui-spec.md
+__pycache__/
+
+# Local tool state
+.claude/
+.mcp.json
+.repowise/
+.vscode/

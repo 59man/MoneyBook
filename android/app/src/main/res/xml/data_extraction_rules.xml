@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: the device-only settings (passcode, alarm, quick add) stay on this phone. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/device_settings.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/device_settings.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

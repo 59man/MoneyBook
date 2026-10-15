@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Only Android 8 and 9 need it, to save a photo into Pictures/MoneyBook; 10+ goes through MediaStore. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <application
+        android:name=".MoneyBookApp"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="MoneyBook"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MoneyBook">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity>
+        <!-- The camera writes its photo into cacheDir/capture/ through this provider. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.capture"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+        <receiver android:name=".notify.ReminderReceiver" android:exported="false" />
+        <receiver android:name=".widget.MidnightReceiver" android:exported="false" />
+        <receiver android:name=".notify.BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".widget.Summary4x1Receiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_summary_4x1" />
+        </receiver>
+        <receiver android:name=".widget.Summary4x2Receiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_summary_4x2" />
+        </receiver>
+        <receiver android:name=".widget.QuickAdd2x1Receiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_2x1" />
+        </receiver>
+        <receiver android:name=".widget.QuickAdd2x1WhiteReceiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_2x1_white" />
+        </receiver>
+        <receiver android:name=".widget.QuickAdd2x2Receiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_2x2" />
+        </receiver>
+        <receiver android:name=".widget.QuickAdd2x2WhiteReceiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_2x2_white" />
+        </receiver>
+        <receiver android:name=".widget.QuickAdd4x1Receiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_4x1" />
+        </receiver>
+        <receiver android:name=".widget.QuickAdd4x1WhiteReceiver" android:exported="true" android:label="MoneyBook">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_4x1_white" />
+        </receiver>
+    </application>
+</manifest>

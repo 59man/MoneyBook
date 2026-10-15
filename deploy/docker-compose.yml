@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: moneybook
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d moneybook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # loopback only: HTTPS comes from the host's Tailscale (`tailscale serve`), see README
+      - "127.0.0.1:${MB_HOST_PORT:-8095}:8080"
+    environment:
+      MB_DB_URL: jdbc:postgresql://db:5432/moneybook
+      MB_DB_USER: postgres
+      MB_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      MB_JWT_SECRET: ${MB_JWT_SECRET:?set MB_JWT_SECRET in deploy/.env}
+      MB_API_KEY: ${MB_API_KEY:?set MB_API_KEY in deploy/.env}
+      MB_DATA: /data
+      MB_PORT: "8080"
+    volumes:
+      - data:/data
+    restart: unless-stopped
+
+  backup:
+    image: postgres:17-alpine
+    command: ["sh", "/backup/backup.sh"]
+    user: "${BACKUP_UID:-1000}:${BACKUP_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-UTC}
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      PGDATABASE: moneybook
+    volumes:
+      - data:/data:ro
+      - ./backups:/backups
+      - ./backup:/backup:ro
+    healthcheck:
+      # a dump from the last two days; a fresh install is "starting" until its first 03:00 run (or `backup.sh now`)
+      test: ["CMD-SHELL", "find /backups/daily -name 'moneybook-*.dump' -mtime -2 | grep -q ."]
+      interval: 1h
+      timeout: 10s
+      retries: 1
+      start_period: 26h
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  data:

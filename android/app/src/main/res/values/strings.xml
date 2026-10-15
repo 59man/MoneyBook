@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_summary_description">This month\'s income, expenses and total, and the change vs. last month.</string>
+    <string name="widget_quick_description">Shortcuts to add income or an expense, search and bookmarks.</string>
+    <string name="shortcut_add_short">Add</string>
+    <string name="shortcut_add_long">Add an entry</string>
+</resources>
