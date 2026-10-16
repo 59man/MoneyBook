@@ -11,7 +11,7 @@ class AccessRulesTest {
     private val rules = AccessRules(Cidr.DEFAULTS, setOf("moneybook.lan"))
 
     private fun check(
-        peer: String?, host: String? = "100.103.137.108:8095", method: String = "GET", path: String = "/",
+        peer: String?, host: String? = "100.101.102.103:8095", method: String = "GET", path: String = "/",
         origin: String? = null, sfs: String? = null,
     ) = rules.check(peer, host, method, path, origin, sfs)
 
@@ -34,10 +34,10 @@ class AccessRulesTest {
 
     @Test
     fun `host rule`() {
-        for (h in listOf("100.103.137.108", "100.103.137.108:8095", "localhost", "LOCALHOST:8080", "[::1]:8080", "moneybook.lan:8095", "MoneyBook.LAN")) {
+        for (h in listOf("100.101.102.103", "100.101.102.103:8095", "localhost", "LOCALHOST:8080", "[::1]:8080", "moneybook.lan:8095", "MoneyBook.LAN")) {
             assertNull(check("127.0.0.1", host = h), h)
         }
-        for (h in listOf("evil.example", "evil.example:8095", null, "", "100.103.137.108.evil.example")) {
+        for (h in listOf("evil.example", "evil.example:8095", null, "", "100.101.102.103.evil.example")) {
             assertEquals("forbidden_host", check("127.0.0.1", host = h), h.toString())
         }
     }
@@ -46,11 +46,11 @@ class AccessRulesTest {
     fun `csrf rule on admin posts`() {
         fun post(origin: String?, sfs: String? = null, path: String = "/admin/backup", method: String = "POST") =
             check("127.0.0.1", method = method, path = path, origin = origin, sfs = sfs)
-        assertNull(post("http://100.103.137.108:8095"))
-        assertNull(post("HTTP://100.103.137.108:8095"))
+        assertNull(post("http://100.101.102.103:8095"))
+        assertNull(post("HTTP://100.101.102.103:8095"))
         assertEquals("forbidden_origin", post("http://evil.example"))
-        assertEquals("forbidden_origin", post("https://100.103.137.108:8095"))
-        assertEquals("forbidden_origin", post("http://100.103.137.108"))
+        assertEquals("forbidden_origin", post("https://100.101.102.103:8095"))
+        assertEquals("forbidden_origin", post("http://100.101.102.103"))
         assertNull(post(null, sfs = "same-origin"))
         assertEquals("forbidden_origin", post(null, sfs = "cross-site"))
         assertEquals("forbidden_origin", post(null))

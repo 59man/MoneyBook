@@ -211,8 +211,8 @@ class HttpSyncApiTest {
 
     @Test fun plainHttpToTailscaleNeedsAVpn() = runBlocking {
         var asked = 0
-        val off = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://100.103.137.108:8095", refreshToken = "R"))) { asked++; false }
-        assertEquals("vpn_off", try { off.login("http://100.103.137.108:8095", login); "" } catch (e: SyncError) { e.code })
+        val off = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://100.101.102.103:8095", refreshToken = "R"))) { asked++; false }
+        assertEquals("vpn_off", try { off.login("http://100.101.102.103:8095", login); "" } catch (e: SyncError) { e.code })
         assertEquals("vpn_off", try { off.sync(SyncRequest(0)); "" } catch (e: SyncError) { e.code })
         assertEquals("vpn_off", try { off.attachmentExists("a.jpg"); "" } catch (e: SyncError) { e.code })
         assertEquals(3, asked) // every call is gated, and each failed before opening a connection

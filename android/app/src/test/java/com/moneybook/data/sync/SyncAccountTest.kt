@@ -72,12 +72,12 @@ class SyncAccountTest {
         val counting = object : SyncApi by c.api {
             override suspend fun login(serverUrl: String, request: LoginRequest): TokenResponse { calls++; return c.api.login(serverUrl, request) }
         }
-        val r = c.account(counting).login("http://192.168.0.103:8095", "anna")
+        val r = c.account(counting).login("http://10.1.2.3:8095", "anna")
         assertEquals(LoginResult.Failed(SyncError.InsecureUrl), r)
         assertEquals(0, calls)
         assertFalse(c.device.current().signedIn)
         assertEquals("", c.device.current().serverUrl)
-        val ok = c.account(counting).login("http://100.103.137.108:8095", "anna")
+        val ok = c.account(counting).login("http://100.101.102.103:8095", "anna")
         assertTrue(ok == LoginResult.Synced || ok == LoginResult.NeedsChoice)
         assertEquals(1, calls)
     }

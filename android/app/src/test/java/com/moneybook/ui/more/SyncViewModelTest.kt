@@ -84,7 +84,7 @@ class SyncViewModelTest {
 
     @Test fun insecureUrlShowsTheHint() = runBlocking {
         phone.seed()
-        vm.login("http://192.168.0.103:8095", "anna")
+        vm.login("http://10.1.2.3:8095", "anna")
         assertEquals("Use https, or a Tailscale 100.x address", until { it.error != null && !it.busy }.error)
     }
 
