@@ -37,19 +37,18 @@ Updates install over the old version as long as they are signed with the same ke
 
 ## Run your own sync server (optional)
 
-You need a machine that is always on (a home server, a NAS, a small VPS) with Docker and Compose v2, and [Tailscale](https://tailscale.com) on it and on your phone.
+You need a machine that is always on (a home server, a NAS, a small VPS) with Docker and Compose v2, and [Tailscale](https://tailscale.com) on it and on your phone. The server is one container (Postgres and the server together).
 
 ```bash
 git clone <this repository> && cd <repository>/deploy
-cp .env.example .env              # set POSTGRES_PASSWORD, MB_JWT_SECRET (openssl rand -base64 48), MB_API_KEY (openssl rand -hex 32), TZ
-mkdir -m 700 backups
+cp .env.example .env              # everything in it is optional
+mkdir -m 700 backups              # must be owned by uid 1000 (see deploy/README.md)
 docker compose up -d --build      # use sudo if your user is not in the docker group
-tailscale serve --bg --https=443 http://127.0.0.1:8095      # HTTPS inside your tailnet
 ```
 
-Then in the app open **More, Sync**, enter `https://<machine>.<tailnet>.ts.net` as Server URL and your `MB_API_KEY` as API key, and log in. When the server and the phone both hold data you choose to merge them or replace one side. Sync is opt-in, works offline-first and pushes changes in the background.
+Then open `http://<tailscale ip of that machine>:8095/` (for example `http://100.x.y.z:8095/`) in a browser on a device in your tailnet. The page shows the server URL and the API key (with Copy), the devices that sync, how much data the server holds and its backups (with Back up now). In the app open **More, Sync**, enter that URL as Server URL and the key as API key, and log in. The phone needs Tailscale on to sync, at home too. When the server and the phone both hold data you choose to merge them or replace one side. Sync is opt-in, works offline-first and pushes changes in the background.
 
-The server also makes nightly backups (database and photos) and has a tested restore script. See [deploy/README.md](deploy/README.md) for details (ports, backups, restore, updating).
+The server answers only Tailscale and loopback addresses (a device on your LAN gets 403), and the app sends plain http only to a Tailscale address while Tailscale is on. It makes nightly backups (database and photos) and has a tested restore command. See [deploy/README.md](deploy/README.md) for details (trusted networks, the key, backups, restore, updating).
 
 ## Build from source
 
@@ -69,7 +68,7 @@ A signed release build needs your own keystore: set `MB_KEYSTORE_FILE`, `MB_KEYS
 - `shared/` Kotlin/JVM library used by the app and the server: money and currency formats, Excel and backup codecs, the sync wire types
 - `android/` the app (Kotlin, Jetpack Compose, Room)
 - `server/` the sync and backup server (Kotlin, Ktor, Postgres)
-- `deploy/` Docker Compose stack, backup and restore scripts
+- `deploy/` Docker Compose file and the server deployment notes
 - `tools/` small developer helpers (icons, adb scripts)
 
 `CLAUDE.md` describes the architecture in detail.

@@ -1,30 +1,34 @@
 # MoneyBook server deployment
 
-Containers (`docker-compose.yml`): `db` (Postgres 17), `api` (Ktor) and `backup` (nightly dump). The server runs on a machine you control (for example a home server or a CasaOS box). Only the API port is published, and only on `127.0.0.1`: the API speaks plain HTTP, so HTTPS comes from the host's own Tailscale (`tailscale serve`, below). Run every command below from this directory.
+One container, `moneybook` (`docker-compose.yml`): Postgres 17 and the Ktor server together, built from `server/Dockerfile`. It runs on a machine you control (a home server, a NAS, a small VPS) and is reached over your Tailscale network at `http://<tailscale-ip>:8095/` (for example `http://100.x.y.z:8095/`). The server decides who may talk to it by source address (below), so no HTTPS proxy is needed. Run every command below from this directory.
+
+Data lives in the Docker volume `data` (`/data`: the database, the photos and the generated secrets). Backups go to `./backups` on the host (`/backups` in the container).
 
 ## Prerequisites
 
 - Docker with a recent Compose v2 (2.24.4 or newer).
-- Tailscale on the machine (CasaOS has it as an app) and on the phone, with HTTPS certificates enabled for the tailnet.
+- Tailscale on the machine and on the phone.
 - Your login on that machine must be allowed to use Docker: in the `docker` group, or prefix every `docker` command below with `sudo`.
 
 ## First start
 
 ```bash
-cp .env.example .env              # then edit it, never commit it
-openssl rand -base64 48           # paste into MB_JWT_SECRET; pick a long POSTGRES_PASSWORD
-openssl rand -hex 32              # paste into MB_API_KEY (see "API key" below)
-                                  # MB_HOST_PORT is the loopback port (default 8095; pick another if it is taken)
-mkdir -m 700 backups              # owned by you; BACKUP_UID/BACKUP_GID in .env must be your ids (id -u, id -g)
+cp .env.example .env              # everything in it is optional; never commit it
+mkdir -m 700 backups              # the container user is uid 1000, see "Backups directory" below
 docker compose up -d --build
-docker compose ps                 # db healthy; backup stays "starting" until its first dump
-docker compose exec backup sh /backup/backup.sh now   # first dump now, so backup turns healthy (else it is unhealthy after 26 h with no dump)
+docker compose ps                 # moneybook becomes healthy within a minute
 curl http://127.0.0.1:8095/health # {"status":"ok"}; use your MB_HOST_PORT
 ```
 
-### On a home server (for example CasaOS)
+Then open `http://<tailscale-ip>:8095/` in a browser on a device in your tailnet (`tailscale ip -4` on the server prints the address). Copy the server URL and the API key from the page into the app (More, Sync); the phone needs Tailscale on, at home too.
 
-The image is built from the repo root (`server/` and `shared/` are in the build context), so copy the tree to the machine (or clone the repository there), then run the first start with `sudo docker compose` if your user is not in the `docker` group:
+### Backups directory
+
+The container runs as uid/gid 1000 and never as root, so `./backups` must be owned by 1000. If your user is 1000 (`id -u`), `mkdir -m 700 backups` is enough. Otherwise: `sudo mkdir -m 700 backups && sudo chown 1000:1000 backups`. A symlink to a bigger disk works the same way (the target must be owned by 1000).
+
+### On a home server
+
+The image is built from the repo root (`server/` and `shared/` are in the build context), so copy the tree to the machine (or clone the repository there) and run the first start there, with `sudo docker compose` if needed:
 
 ```bash
 # from the repo root; copy only what the build needs (never your own exports or .env files)
@@ -34,37 +38,48 @@ ssh <user>@<server-ip>
 cd moneybook/deploy
 ```
 
-To keep the backups on a bigger disk, make `backups` a symlink before the first start: `mkdir -m 700 /path/to/moneybook-backups && ln -s /path/to/moneybook-backups backups`.
+## The page
 
-Publish it with the host's Tailscale. First enable MagicDNS and HTTPS certificates in the Tailscale admin console (DNS page). Then, on the machine (if Tailscale runs in a container, prefix with `sudo docker exec tailscale`; check the name with `sudo docker ps`):
+`GET /` is a status page, served only to trusted networks. It shows:
+
+- **Connect the app**: the server URL (the address you opened) and the API key, with Show and Copy and Regenerate.
+- **Devices**: every device that logged in, with its last sync; Remove signs one out.
+- **Data**: how many entries, accounts, categories and photos the server holds.
+- **Backups**: the last backup, the files, and Back up now.
+
+The same data is available as JSON from `GET /admin/status`. The page is plain http, so Copy works through a fallback (browsers only allow the clipboard API on https).
+
+## Trusted networks and allowed hosts
+
+The server checks every request before anything else:
+
+- **Network**: the TCP source address must be in `MB_TRUSTED_NETWORKS`, a comma-separated list of CIDRs. The default (empty) is `100.64.0.0/10,127.0.0.0/8,::1/128`: Tailscale and loopback. Others get 403 `{"error":"forbidden_network"}`.
+- **Host**: the `Host` header must be an IP address, `localhost`, or a name in `MB_ALLOWED_HOSTS` (comma-separated, optional). Otherwise 403 `forbidden_host`. This stops DNS-rebinding tricks; add your MagicDNS name here only if you want to open the page by name.
+- **Origin**: every state-changing request from a browser (the page's buttons) must carry this page's own origin. Otherwise 403 `forbidden_origin`. The app is not affected.
+
+`GET /health` skips all three checks. If you want a LAN device to reach the server too, add its network to `MB_TRUSTED_NETWORKS` (for example `100.64.0.0/10,127.0.0.0/8,::1/128,10.1.2.0/24`), but then the app still sends plain http only to Tailscale addresses.
+
+The compose file publishes the port on `0.0.0.0` (IPv4 only), so Docker keeps each client's real source address for these rules; the rules, not the port binding, are what keep the LAN out. Check it from another machine on the LAN (not in your tailnet):
 
 ```bash
-tailscale serve --bg --https=443 http://127.0.0.1:8095    # your MB_HOST_PORT
-tailscale serve status
-tailscale status --self                                    # shows the machine name
+curl -m 5 http://<lan-ip-of-server>:8095/          # {"error":"forbidden_network"}
+curl -m 5 http://<lan-ip-of-server>:8095/health    # {"status":"ok"} (health is exempt)
 ```
 
-If 443 is already served for something else, use `--https=8443`; the URL then ends in `:8443`.
-
-The app's server URL is `https://<machine name>.<tailnet>.ts.net`. The phone needs the Tailscale app on to sync, at home too. Nothing listens on the LAN, so `http://<server-ip>:8095` does not answer from other devices. Check it:
-
-- `docker version` on the machine: Docker older than 28 may let LAN hosts reach ports published on `127.0.0.1`.
-- From another machine on the LAN, `curl -m 3 http://<server-ip>:8095/health` must fail (time out or refuse). If it answers, stop and fix the firewall before logging in.
+If the first command returns the page, stop and check `MB_TRUSTED_NETWORKS` and your Docker version (with an old Docker or a userland proxy the source address may be replaced by the Docker bridge's, which is not trusted by default either; do not add the bridge network to the list).
 
 ## API key
 
-The server has one owner and no accounts. The app logs in with a single key, `MB_API_KEY` in `.env` (at least 32 characters; the server refuses to start without it):
+The server has one owner and no accounts; the app logs in with one API key. Where it comes from:
 
-```bash
-openssl rand -hex 32              # put the output in .env as MB_API_KEY=...
-docker compose up -d              # applies a changed .env
-```
+- By default the server makes a 64-hex-character key at its first start, stores it, and shows it on the page. Regenerate on the page makes a new one.
+- Or set `MB_API_KEY` in `.env` (at least 32 characters, `openssl rand -hex 32`) and run `docker compose up -d`. The key from `.env` wins over the stored one, and Regenerate then answers 409 `key_from_env`: change `.env` instead. Removing `MB_API_KEY` later keeps the last key.
 
-Paste the same key into the app (More, Sync, Server URL and API key). Changing `MB_API_KEY` and running `docker compose up -d` signs every device out: each one has to log in again with the new key (the server remembers only a hash of the key and drops all refresh tokens when it changes). Phones keep their data and merge again after the new login. Access tokens last 15 minutes, so a signed-out device may still sync for a few minutes.
+Whenever the key changes, every device is signed out: it has to log in again with the new key (the server drops all refresh tokens). Phones keep their data and merge again after the new login. Access tokens last 15 minutes, so a signed-out device may still sync for a few minutes. The key is stored in the database, so a backup holds it.
 
 ## Backups
 
-`backup` writes at 03:00 (container time zone, `TZ` in `.env`) into `deploy/backups/`:
+The server backs up in-process, at 03:00 (container time zone, `TZ` in `.env`), and on demand with Back up now on the page. Files go to `backups/`:
 
 ```
 backups/daily/    moneybook-YYYY-MM-DD.dump  attachments-YYYY-MM-DD.tgz   newest 7
@@ -72,32 +87,32 @@ backups/weekly/   the Sunday pair                                         newest
 backups/monthly/  the 1st-of-month pair                                   newest 6
 ```
 
-Files are owner-only (600, directories 700). A failed run is logged (`docker compose logs backup`) and never deletes older backups. The `backup` service has a healthcheck that wants a dump from the last two days, so `docker compose ps` shows `unhealthy` when backups stop; a fresh install shows `starting` for 26 hours unless you run `backup.sh now` once (below). Run one now:
+Files are owner-only (600, directories 700). A failed run is shown on the page and logged, and never deletes older backups.
+
+**Backups hold your financial data and the API key.** Keep `backups` owner-only and copy it off this machine yourself (another disk, an encrypted remote); a backup on the same disk does not survive the disk.
+
+## Restore
+
+Restore replaces the live data, so make sure the backup is the one you want. It runs inside the container; the container keeps running and the server pauses for a few seconds:
 
 ```bash
-docker compose exec backup sh /backup/backup.sh now
+docker exec -it moneybook restore /backups/daily/moneybook-<date>.dump /backups/daily/attachments-<date>.tgz
 ```
 
-**Backups hold your financial data.** Keep `deploy/backups` owner-only (`chmod 700 backups`) and copy it off this machine yourself (another disk, an encrypted remote); a backup on the same disk does not survive the disk.
+Type `yes` to continue (`--yes` skips the question). The attachments file is optional. The command checks the files first (a bad file is refused and nothing is touched), stops the server, recreates the database, restores it, replaces the attachments and starts the server again. If a step fails it exits non-zero and the server starts on whatever state exists; fix the cause and run it again (the backup files are not touched).
 
-## Restore drill
+The restore gives the server a new epoch, so phones notice the data went back in time and push all their data again; nothing a phone still holds is lost. It also brings back the API key and refresh tokens of the backup; a device that logged in later signs in again with the key shown on the page. Try it once on test data before you need it.
 
-Do this once before you need it. It replaces the live data, so on a stack that holds real entries make sure the backup you restore from is the one you want.
-
-1. `docker compose exec backup sh /backup/backup.sh now`
-2. Note what the data looks like: log in with curl and save a pull (`POST /v1/sync` with `{"cursor":0}`), or count rows: `docker compose exec db psql -U postgres moneybook -c 'select count(*) from sync_record'`.
-3. Make the damage: `docker compose stop api && docker compose exec db psql -U postgres -d postgres -c 'drop database moneybook with (force)'`
-4. `./restore.sh backups/daily/moneybook-<date>.dump backups/daily/attachments-<date>.tgz` (type `yes`; `--yes` skips the question). It checks the files first, stops the API, recreates the database, restores it, replaces the attachments and starts the API. The attachments file is optional. If a step fails it exits non-zero and does not start the API; fix the cause and run it again (the backup files are not touched).
-5. Repeat the pull from step 2 with a fresh login and compare. An attachment you uploaded before must still download.
-
-`restore.sh` gives the server a new epoch, so phones notice the data went back in time and push all their data again (M4); nothing a phone still holds is lost. A restore can also leave phones signed out (the refresh tokens come from the dump); log in again with the key: the same server merges automatically and nothing is lost.
-
-Restoring brings back the refresh tokens that existed at the backup time; devices that logged in later sign in again.
-
-## Updating and logs
+## Updating, logs, stopping
 
 ```bash
-git pull && docker compose up -d --build   # rebuilds the api image; the database migrates itself at start
-docker compose logs -f api                 # also: db, backup
-docker compose down                        # stops, keeps volumes; `down -v` deletes the data
+git pull && docker compose up -d --build   # rebuilds the image; the database migrates itself at start
+docker compose logs -f moneybook
+docker compose down                        # stops, keeps the volume; `down -v` deletes the data
 ```
+
+`docker stop` gives the server and Postgres up to 30 s to shut down cleanly. `.env` options: `MB_API_KEY`, `MB_HOST_PORT`, `TZ`, `MB_TRUSTED_NETWORKS`, `MB_ALLOWED_HOSTS`.
+
+## Moving from the old three-container stack
+
+Earlier versions ran `db`, `api` and `backup` and used `tailscale serve` for HTTPS. Stop that stack with its old compose file (`docker compose down`, add `-v` only if the data is disposable), turn the `tailscale serve` entry off, then start this one. The data is not migrated automatically: restore an old `pg_dump` with `pg_restore` into the new database if you need it, or log in from the phone and merge.
