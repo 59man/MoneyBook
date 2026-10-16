@@ -1,5 +1,6 @@
 package com.moneybook.ui.more
 
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.hasScrollAction
@@ -123,9 +124,18 @@ class CurrencySettingsTest {
         waitFor(label)
         assertEquals(1, rule.onAllNodesWithText(label).fetchSemanticsNodes().size)
 
-        // the rate keypad overlay takes every pointer event until it is gone; a Back tap during it is lost (seen on CI)
-        rule.waitUntil(10_000) { rule.onAllNodesWithText("Done").fetchSemanticsNodes().isEmpty() }
-        rule.onNodeWithContentDescription("Back").performClick()
+        // Back works only once Main Currency Setting is resumed again (whenResumed drops a tap during the transition from
+        // the currency list, seen on slower CI machines), so tap until Configuration shows.
+        val configuration = "Start Screen (Daily/Calendar)"
+        for (i in 0 until 20) {
+            if (rule.onAllNodesWithText(configuration).fetchSemanticsNodes().isNotEmpty()) break
+            // mid-transition both screens have a Back button: tap only when one is left
+            if (rule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().size == 1) {
+                rule.onNodeWithContentDescription("Back").performClick()
+            }
+            rule.mainClock.advanceTimeBy(500)
+            rule.waitForIdle()
+        }
         // read the state inside the wait: the new main's display row can land a moment after the main code changes
         try {
             rule.waitUntil(10_000) {
