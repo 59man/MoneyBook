@@ -56,6 +56,19 @@ class AccessRulesTest {
         assertEquals("forbidden_origin", post(null))
         assertNull(post(null, path = "/admin/status", method = "GET"))
         assertNull(post(null, path = "/v1/sync"))
+        // routing ignores empty segments: a doubled slash must not skip the rule
+        assertEquals("forbidden_origin", post("http://evil.example", path = "//admin/key/regenerate"))
+        assertEquals("forbidden_origin", post(null, path = "//admin//backup"))
+        // any unsafe method, not only POST; a foreign Origin is refused even on /v1/
+        assertEquals("forbidden_origin", post("http://evil.example", path = "/admin/backup", method = "DELETE"))
+        assertEquals("forbidden_origin", post("http://evil.example", path = "/v1/sync"))
+    }
+
+    @Test
+    fun `only an exact GET health skips the rules`() {
+        assertEquals("forbidden_network", check("192.168.0.5", path = "//health/../admin/status"))
+        assertEquals("forbidden_network", check("192.168.0.5", path = "/health", method = "POST"))
+        assertNull(check("192.168.0.5", host = "evil.example", path = "//health"))
     }
 
     @Test

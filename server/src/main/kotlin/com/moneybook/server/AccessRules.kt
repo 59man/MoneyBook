@@ -52,13 +52,21 @@ class Cidr private constructor(private val net: ByteArray, private val bits: Int
 /** Who may talk to the server. Pure: [check] returns the error code to answer with (403), or null to serve. */
 class AccessRules(private val trusted: List<Cidr>, private val allowedHosts: Set<String>) {
     fun check(peer: String?, hostHeader: String?, method: String, path: String, origin: String?, secFetchSite: String?): String? {
-        if (path == "/health") return null
+        // routing ignores empty segments, so judge the path with repeated slashes collapsed ("//admin/x" is "/admin/x")
+        val p = path.replace(Regex("/+"), "/")
+        if (p == "/health" && method == "GET") return null
         val ip = peer?.let(::ipOrNull)
         if (ip == null || trusted.none { it.contains(ip) }) return "forbidden_network"
         val host = hostHeader?.let(::hostName)
         if (host == null || (ipOrNull(host) == null && host != "localhost" && host !in allowedHosts)) return "forbidden_host"
-        if (method == "POST" && path.startsWith("/admin/")) {
-            val ok = if (origin != null) origin.equals("http://$hostHeader", ignoreCase = true) else secFetchSite == "same-origin"
+        // CSRF: any state-changing request from a browser must come from this page. The app sends no Origin and
+        // only calls /v1/ (bearer tokens, nothing a foreign page can ride on).
+        if (method != "GET" && method != "HEAD") {
+            val ok = when {
+                origin != null -> origin.equals("http://$hostHeader", ignoreCase = true)
+                p.startsWith("/v1/") -> true
+                else -> secFetchSite == "same-origin"
+            }
             if (!ok) return "forbidden_origin"
         }
         return null
