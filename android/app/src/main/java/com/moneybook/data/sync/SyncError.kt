@@ -7,6 +7,7 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
     class Server(val status: Int) : SyncError("server $status")
     class Rejected(val status: Int, val error: String) : SyncError("rejected $status")
     class Other(cause: Throwable?) : SyncError("other", cause)
+    object InsecureUrl : SyncError("insecure_url")
 
     /** What `DeviceSettings.lastSyncError` stores. */
     val code: String
@@ -16,5 +17,6 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
             is Server -> "server"
             is Rejected -> "rejected"
             is Other -> "other"
+            InsecureUrl -> "insecure_url"
         }
 }

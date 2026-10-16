@@ -2,6 +2,7 @@ package com.moneybook.ui.more
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -119,7 +120,7 @@ private fun LoginForm(state: SyncUiState, onLogin: (String, String) -> Unit) {
     var key by remember { mutableStateOf("") } // never saved with the instance state
     var show by remember { mutableStateOf(false) }
     val submit = { if (!state.busy) onLogin(url, key) }
-    Field("Server URL", url, { url = it }, KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, autoCorrectEnabled = false))
+    Field("Server URL", url, { url = it }, KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, autoCorrectEnabled = false), hint = "http://100.x.y.z:8095")
     Field(
         "API key", key, { key = it },
         KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
@@ -148,6 +149,7 @@ private fun Field(
     actions: KeyboardActions = KeyboardActions.Default,
     visual: VisualTransformation = VisualTransformation.None,
     trailing: (@Composable () -> Unit)? = null,
+    hint: String? = null,
 ) {
     Column(Modifier.padding(start = 10.dp, end = 20.dp, top = 15.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -161,6 +163,12 @@ private fun Field(
             keyboardOptions = keyboard, keyboardActions = actions, visualTransformation = visual,
             modifier = Modifier.fillMaxWidth().heightIn(min = MbDimens.nameField).padding(start = 10.dp, top = 6.dp)
                 .semantics { contentDescription = label },
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty() && hint != null) Text(hint, style = MbType.formValue, color = Mb.colors.textSecondary)
+                    inner()
+                }
+            },
         )
         Hairline()
     }

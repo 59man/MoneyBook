@@ -1,5 +1,6 @@
 package com.moneybook.data.sync
 
+import com.moneybook.BuildConfig
 import com.moneybook.data.DeviceSettingsRepository
 import com.moneybook.data.Seeder
 import com.moneybook.data.SettingsRepository
@@ -37,6 +38,7 @@ class SyncAccount(
 
     suspend fun login(serverUrl: String, apiKey: String): LoginResult {
         val url = normalizeUrl(serverUrl)
+        if (!ServerUrl.isAllowed(url, BuildConfig.DEBUG)) return LoginResult.Failed(SyncError.InsecureUrl)
         // Logout keeps url and lastSyncAt (the key is never stored): the same server that already synced here (after a server restore or an
         // expired session) merges silently, nothing is lost. A login that was cancelled or failed has lastSyncAt 0, so it asks again.
         val stored = device.current()

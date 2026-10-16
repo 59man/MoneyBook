@@ -1,5 +1,6 @@
 package com.moneybook.data.sync
 
+import com.moneybook.BuildConfig
 import com.moneybook.data.DeviceSettingsRepository
 import com.moneybook.shared.sync.LoginRequest
 import com.moneybook.shared.sync.RefreshRequest
@@ -95,7 +96,11 @@ class HttpSyncApi(private val device: DeviceSettingsRepository) : SyncApi {
 
     // ---- plumbing ----
 
-    private suspend fun base(url: String? = null) = (url ?: device.current().serverUrl).trimEnd('/')
+    private suspend fun base(url: String? = null): String {
+        val result = (url ?: device.current().serverUrl).trim().trimEnd('/')
+        if (!ServerUrl.isAllowed(result, BuildConfig.DEBUG)) throw SyncError.InsecureUrl
+        return result
+    }
 
     private class Body(val type: String, val length: Long, val write: (java.io.OutputStream) -> Unit)
 

@@ -194,10 +194,19 @@ class HttpSyncApiTest {
         val closed = try { api.sync(SyncRequest(0)); null } catch (e: SyncError) { e }
         assertTrue(closed is SyncError.Offline)
         assertEquals("offline", closed!!.code)
-        val unknown = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://nonexistent.invalid", refreshToken = "R"))).run {
-            try { login("http://nonexistent.invalid", login); null } catch (e: SyncError) { e }
+        val unknown = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "https://nonexistent.invalid", refreshToken = "R"))).run {
+            try { login("https://nonexistent.invalid", login); null } catch (e: SyncError) { e }
         }
         assertTrue(unknown is SyncError.Offline)
+    }
+
+    @Test fun plainHttpOutsideTailscaleIsRefusedBeforeAnyConnection() = runBlocking {
+        val login = LoginRequest("k3y-abc", "dev-1", "Phone")
+        val lan = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://192.168.0.5:8095", refreshToken = "R")))
+        assertEquals("insecure_url", try { lan.login("http://example.com", login); "" } catch (e: SyncError) { e.code })
+        assertEquals("insecure_url", try { lan.sync(SyncRequest(0)); "" } catch (e: SyncError) { e.code })
+        assertEquals("insecure_url", try { lan.attachmentExists("a.jpg"); "" } catch (e: SyncError) { e.code })
+        assertTrue(seen.isEmpty())
     }
 
     @Test fun errorMessagesCarryNoBodyOrSecrets() = runBlocking {

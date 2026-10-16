@@ -7,8 +7,10 @@ import com.moneybook.shared.model.AccountGroupType
 import com.moneybook.shared.model.TxnType
 import com.moneybook.data.DefaultData
 import com.moneybook.testutil.Fixtures
+import com.moneybook.shared.sync.LoginRequest
 import com.moneybook.shared.sync.SyncRequest
 import com.moneybook.shared.sync.SyncResponse
+import com.moneybook.shared.sync.TokenResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -61,6 +63,23 @@ class SyncAccountTest {
         assertEquals("http://10.0.2.2:8095", SyncAccount.normalizeUrl("http://10.0.2.2:8095//"))
         assertEquals("https://host.ts.net", SyncAccount.normalizeUrl("  host.ts.net  "))
         assertEquals("", SyncAccount.normalizeUrl("  "))
+    }
+
+    @Test fun loginRefusesPlainHttpOutsideTailscaleWithoutCallingTheApi() = runBlocking {
+        val c = device("dev-c")
+        c.seed()
+        var calls = 0
+        val counting = object : SyncApi by c.api {
+            override suspend fun login(serverUrl: String, request: LoginRequest): TokenResponse { calls++; return c.api.login(serverUrl, request) }
+        }
+        val r = c.account(counting).login("http://192.168.0.103:8095", "anna")
+        assertEquals(LoginResult.Failed(SyncError.InsecureUrl), r)
+        assertEquals(0, calls)
+        assertFalse(c.device.current().signedIn)
+        assertEquals("", c.device.current().serverUrl)
+        val ok = c.account(counting).login("http://100.103.137.108:8095", "anna")
+        assertTrue(ok == LoginResult.Synced || ok == LoginResult.NeedsChoice)
+        assertEquals(1, calls)
     }
 
     @Test fun loginToEmptyServerMergesWithoutAsking() = runBlocking {

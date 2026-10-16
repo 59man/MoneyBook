@@ -57,6 +57,11 @@ class SyncScreenTest {
         assertEquals(listOf("login casa.example.ts.net|secret key"), calls)
     }
 
+    @Test fun emptyUrlFieldShowsTheTailscaleHint() {
+        show(SyncUiState())
+        rule.onNodeWithText("http://100.x.y.z:8095").assertIsDisplayed()
+    }
+
     @Test fun logInButtonSubmitsAndPrefillsFromTheDevice() {
         show(SyncUiState(serverUrl = "https://casa.example.ts.net"))
         rule.onNodeWithContentDescription("API key").performTextInput("pw")

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext cannot be limited to a CIDR here. The app enforces it itself: plain http only for 100.64.0.0/10 (data/sync/ServerUrl.kt). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

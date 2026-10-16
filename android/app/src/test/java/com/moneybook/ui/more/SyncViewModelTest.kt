@@ -52,6 +52,7 @@ class SyncViewModelTest {
 
     @Test fun loginErrorTexts() {
         assertEquals("Wrong API key", loginErrorText(SyncError.Unauthorized))
+        assertEquals("Use https, or a Tailscale 100.x address", loginErrorText(SyncError.InsecureUrl))
         assertEquals("Can't reach the server", loginErrorText(SyncError.Offline(null)))
         assertEquals("Too many attempts. Try again in a minute.", loginErrorText(SyncError.Rejected(429, "rate_limited")))
         assertEquals("Server error", loginErrorText(SyncError.Server(500)))
@@ -66,6 +67,7 @@ class SyncViewModelTest {
         assertEquals("Server error", syncErrorText("server"))
         assertEquals("Update the app to sync this data", syncErrorText("rejected"))
         assertEquals("Sync failed", syncErrorText("other"))
+        assertEquals("Use https, or a Tailscale 100.x address", syncErrorText("insecure_url"))
     }
 
     @Test fun wrongKeyShowsTheErrorAndStaysSignedOut() = runBlocking {
@@ -76,6 +78,12 @@ class SyncViewModelTest {
         assertFalse(s.signedIn)
         vm.login("host.ts.net", "anna") // a new attempt clears the old line
         assertTrue(until { it.signedIn }.error == null)
+    }
+
+    @Test fun insecureUrlShowsTheHint() = runBlocking {
+        phone.seed()
+        vm.login("http://192.168.0.103:8095", "anna")
+        assertEquals("Use https, or a Tailscale 100.x address", until { it.error != null && !it.busy }.error)
     }
 
     @Test fun unreachableServerShowsOffline() = runBlocking {
