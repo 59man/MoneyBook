@@ -14,7 +14,7 @@ dump=${files[0]}; tgz=${files[1]:-}
 [ -z "$tgz" ] || [ -f "$tgz" ] || { echo "error: no such file: $tgz" >&2; exit 1; }
 
 set -a; . "$DATA/secrets.env"; set +a
-export PGPASSWORD=$MB_DB_PASSWORD PGHOST=127.0.0.1 PGUSER=postgres
+export PGPASSWORD=$MB_DB_PASSWORD PGHOST=127.0.0.1 PGUSER=postgres PGPORT=${MB_PG_PORT:-5432}
 
 # validate before touching anything
 pg_restore --list < "$dump" > /dev/null || { echo "error: $dump is not a readable pg_dump custom-format file" >&2; exit 1; }

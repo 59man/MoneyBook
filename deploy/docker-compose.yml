@@ -4,10 +4,13 @@ services:
       context: ..
       dockerfile: server/Dockerfile
     container_name: moneybook
-    ports:
-      # IPv4 only: an IPv6 userland proxy would hide the client's source address from the server's network rules
-      - "0.0.0.0:${MB_HOST_PORT:-8095}:8080"
+    # Host networking: the server sees each client's real address (Docker's port forwarding, and Tailscale's
+    # masquerading of forwarded tailnet traffic, would replace it), and Tailscale's own input rules drop
+    # spoofed 100.x sources arriving on other interfaces. Postgres listens on the host's 127.0.0.1:MB_PG_PORT.
+    network_mode: host
     environment:
+      MB_PORT: ${MB_HOST_PORT:-8095}
+      MB_PG_PORT: ${MB_PG_PORT:-5432}
       MB_API_KEY: ${MB_API_KEY:-}                  # optional; when set it is the API key
       MB_TRUSTED_NETWORKS: ${MB_TRUSTED_NETWORKS:-} # empty = 100.64.0.0/10,127.0.0.0/8,::1/128
       MB_ALLOWED_HOSTS: ${MB_ALLOWED_HOSTS:-}

@@ -33,7 +33,7 @@ if [ ! -f "$SECRETS" ]; then
     mv "$tmp" "$SECRETS"
 fi
 set -a; . "$SECRETS"; set +a                       # exports MB_DB_PASSWORD, MB_JWT_SECRET
-export PGPASSWORD=$MB_DB_PASSWORD PGHOST=127.0.0.1 PGUSER=postgres
+export PGPASSWORD=$MB_DB_PASSWORD PGHOST=127.0.0.1 PGUSER=postgres PGPORT=${MB_PG_PORT:-5432}
 
 # 2. database cluster, once (into pg.init, renamed when complete)
 if [ ! -d "$PGDIR" ]; then
@@ -45,7 +45,7 @@ if [ ! -d "$PGDIR" ]; then
 fi
 
 # 3. Postgres: loopback and a socket in /tmp only
-postgres -D "$PGDIR" -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp &
+postgres -D "$PGDIR" -c listen_addresses=127.0.0.1 -c port="$PGPORT" -c unix_socket_directories=/tmp &
 pg=$!
 for _ in $(seq 120); do
     pg_isready -q -h 127.0.0.1 && break
@@ -59,7 +59,7 @@ if ! hasdb moneybook && hasdb moneybook_old; then psql -d postgres -qc 'alter da
 hasdb moneybook || createdb moneybook
 
 start_app() {
-    MB_DB_URL=jdbc:postgresql://127.0.0.1:5432/moneybook MB_DB_USER=postgres MB_DATA="$DATA" MB_BACKUP_DIR=/backups \
+    MB_DB_URL=jdbc:postgresql://127.0.0.1:$PGPORT/moneybook MB_DB_USER=postgres MB_DATA="$DATA" MB_BACKUP_DIR=/backups \
         /app/bin/server &      # the start script ends in `exec java`, so $! is the JVM
     app=$!
     echo "$app" > "$PIDFILE"

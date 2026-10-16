@@ -28,5 +28,5 @@ USER moneybook
 ENV MB_DATA=/data JAVA_OPTS="-Xmx384m"
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /health HTTP/1.0\r\n\r\n" >&3 && grep -q "\"ok\"" <&3'
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/${MB_PORT:-8080} && printf "GET /health HTTP/1.0\r\n\r\n" >&3 && grep -q "\"ok\"" <&3'
 ENTRYPOINT ["/usr/local/bin/entrypoint"]

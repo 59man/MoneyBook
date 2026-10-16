@@ -59,50 +59,29 @@ The server checks every request before anything else:
 
 `GET /health` skips all three checks. If you want a LAN device to reach the server too, add its network to `MB_TRUSTED_NETWORKS` (for example `100.64.0.0/10,127.0.0.0/8,::1/128,10.1.2.0/24`), but then the app still sends plain http only to Tailscale addresses.
 
-The compose file publishes the port on `0.0.0.0` (IPv4 only), so Docker keeps each client's real source address for these rules; the rules, not the port binding, are what keep the LAN out. Check it from another machine on the LAN (not in your tailnet):
+The container uses host networking (`network_mode: host`): the server listens on the host's `MB_HOST_PORT` (default 8095) directly and Postgres on the host's `127.0.0.1:MB_PG_PORT` (default 5432, loopback only). Both ports must be free on the host; change them in `.env` if not. There is no Docker port forwarding in between, so the server sees each client's real address (Docker's forwarding, and Tailscale's masquerading of forwarded tailnet traffic, would replace the phone's `100.x.y.z` with a bridge address, and the server would refuse it). The rules, not the port binding, keep the LAN out. Check it from another machine on the LAN (not in your tailnet):
 
 ```bash
-curl -m 5 http://<lan-ip-of-server>:8095/          # {"error":"forbidden_network"}
-curl -m 5 http://<lan-ip-of-server>:8095/health    # {"status":"ok"} (health is exempt)
+curl -m 5 http://<server-lan-ip>:8095/          # {"error":"forbidden_network"}
+curl -m 5 http://<server-lan-ip>:8095/health    # {"status":"ok"} (health is exempt)
 ```
 
-If the first command returns the page, stop and check `MB_TRUSTED_NETWORKS` and your Docker version (with an old Docker or a userland proxy the source address may be replaced by the Docker bridge's, which is not trusted by default either; do not add the bridge network to the list).
+If the first command returns the page, stop and check `MB_TRUSTED_NETWORKS`; do not add your LAN to the list unless you mean to.
 
-### Required: block spoofed Tailscale addresses on the Docker host
+### Spoofed Tailscale addresses
 
-The rules above trust the source address. Docker publishes the port through NAT, and a machine on your LAN can send packets whose source address is a made-up `100.64.0.0/10` one (a LAN switch does not check it), which would pass as "Tailscale". Close that on the Docker host with one firewall rule that drops anything claiming a Tailscale address that did not arrive through the Tailscale interface:
+A machine on your LAN could send packets whose source address is a made-up `100.64.0.0/10` one, which would pass as "Tailscale". Tailscale's own firewall chain drops those (any `100.64.0.0/10` source that did not arrive on `tailscale0`), so no extra rule is needed. Check that it is there on the server:
 
 ```bash
-sudo iptables -I DOCKER-USER -s 100.64.0.0/10 ! -i tailscale0 -j DROP
+sudo iptables-legacy -S ts-input    # or: sudo iptables -S ts-input
+# expect: -A ts-input -s 100.64.0.0/10 ! -i tailscale0 -j DROP
 ```
 
-`DOCKER-USER` is where Docker leaves room for your own rules; it is kept when Docker restarts but not across a reboot, so make it permanent with a systemd unit, `/etc/systemd/system/moneybook-firewall.service`:
-
-```ini
-[Unit]
-Description=Drop spoofed Tailscale source addresses before Docker's published ports
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/sh -c 'iptables -C DOCKER-USER -s 100.64.0.0/10 ! -i tailscale0 -j DROP 2>/dev/null || iptables -I DOCKER-USER -s 100.64.0.0/10 ! -i tailscale0 -j DROP'
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload && sudo systemctl enable --now moneybook-firewall.service
-sudo iptables -L DOCKER-USER -n -v      # the DROP rule is listed (packet counter grows when something is dropped)
-```
-
-If your Tailscale interface is not called `tailscale0` (`ip link`), use its name. (With nftables only, add an equivalent rule to the forward hook.) Also from the LAN, `curl -m 5 http://<server-lan-ip>:8095/` must still fail as shown above.
+If `ts-input` is missing (Tailscale's firewall mode is off, or it uses nftables only), add the equivalent rule to your input hook yourself: drop `100.64.0.0/10` sources not arriving on `tailscale0`.
 
 Good to know:
 
-- A tool on the Docker host itself that opens `http://127.0.0.1:8095/` arrives through Docker's proxy from the bridge gateway (for example `172.17.0.1`), which is not trusted, so it gets 403. Use the machine's Tailscale address (`http://100.x.y.z:8095/`) or `docker exec moneybook ...`.
+- A tool on the server itself that opens `http://127.0.0.1:8095/` arrives from loopback, which is trusted, so it works.
 - `/health` is exempt from all checks (it only answers that the server is up).
 - The backups in `./backups` contain the API key in plain text (the database holds it so the page can show it). They are owner-only files in a 700 directory; keep it that way and treat the folder like a password.
 
@@ -149,7 +128,7 @@ docker compose logs -f moneybook
 docker compose down                        # stops, keeps the volume; `down -v` deletes the data
 ```
 
-`docker stop` gives the server and Postgres up to 30 s to shut down cleanly. `.env` options: `MB_API_KEY`, `MB_HOST_PORT`, `TZ`, `MB_TRUSTED_NETWORKS`, `MB_ALLOWED_HOSTS`.
+`docker stop` gives the server and Postgres up to 30 s to shut down cleanly. `.env` options: `MB_API_KEY`, `MB_HOST_PORT`, `MB_PG_PORT`, `TZ`, `MB_TRUSTED_NETWORKS`, `MB_ALLOWED_HOSTS`.
 
 ## Moving from the old three-container stack
 
