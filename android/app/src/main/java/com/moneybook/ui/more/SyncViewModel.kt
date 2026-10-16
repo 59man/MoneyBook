@@ -33,10 +33,12 @@ data class SyncUiState(
     val choice: Boolean = false,
 )
 
+private const val VPN_OFF_TEXT = "Turn on Tailscale to sync"
 private const val INSECURE_URL_TEXT = "Use https, or a Tailscale 100.x address"
 
 fun loginErrorText(e: SyncError): String = when {
     e is SyncError.InsecureUrl -> INSECURE_URL_TEXT
+    e is SyncError.VpnOff -> VPN_OFF_TEXT
     e is SyncError.Unauthorized -> "Wrong API key"
     e is SyncError.Offline -> "Can't reach the server"
     e is SyncError.Rejected && e.status == 429 -> "Too many attempts. Try again in a minute."
@@ -51,6 +53,7 @@ fun syncErrorText(code: String): String? = when (code) {
     "session_expired" -> "Session expired. Log in again."
     "server" -> "Server error"
     "insecure_url" -> INSECURE_URL_TEXT
+    "vpn_off" -> VPN_OFF_TEXT
     "rejected" -> "Update the app to sync this data"
     else -> "Sync failed"
 }

@@ -209,6 +209,23 @@ class HttpSyncApiTest {
         assertTrue(seen.isEmpty())
     }
 
+    @Test fun plainHttpToTailscaleNeedsAVpn() = runBlocking {
+        var asked = 0
+        val off = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://100.103.137.108:8095", refreshToken = "R"))) { asked++; false }
+        assertEquals("vpn_off", try { off.login("http://100.103.137.108:8095", login); "" } catch (e: SyncError) { e.code })
+        assertEquals("vpn_off", try { off.sync(SyncRequest(0)); "" } catch (e: SyncError) { e.code })
+        assertEquals("vpn_off", try { off.attachmentExists("a.jpg"); "" } catch (e: SyncError) { e.code })
+        assertEquals(3, asked) // every call is gated, and each failed before opening a connection
+        // the debug hosts (here the test server on 127.0.0.1) and https never ask
+        asked = 0
+        on("/v1/auth/login") { it.reply(200, tokens) }
+        HttpSyncApi(device("")) { asked++; false }.login(url, login)
+        assertEquals(0, asked)
+        val https = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings())) { asked++; false }
+        assertTrue(try { https.login("https://nonexistent.invalid", login); null } catch (e: SyncError) { e } is SyncError.Offline)
+        assertEquals(0, asked)
+    }
+
     @Test fun errorMessagesCarryNoBodyOrSecrets() = runBlocking {
         on("/v1/auth/login") { it.reply(400, """{"error":"bad","detail":"secret-pw"}""") }
         try {

@@ -14,7 +14,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result = when (val outcome = runner(applicationContext)()) {
         SyncOutcome.Success -> Result.success()
         is SyncOutcome.Failure -> when (outcome.error) {
-            is SyncError.Offline, is SyncError.Server -> Result.retry()
+            is SyncError.Offline, SyncError.VpnOff, is SyncError.Server -> Result.retry()
             SyncError.Unauthorized -> {
                 SyncScheduler(applicationContext).cancelAll()
                 Result.success()

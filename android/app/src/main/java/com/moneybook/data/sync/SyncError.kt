@@ -9,6 +9,9 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
     class Other(cause: Throwable?) : SyncError("other", cause)
     object InsecureUrl : SyncError("insecure_url")
 
+    /** Plain http to a Tailscale address while no VPN is active (the address could be the carrier's). */
+    object VpnOff : SyncError("vpn_off")
+
     /** What `DeviceSettings.lastSyncError` stores. */
     val code: String
         get() = when (this) {
@@ -18,5 +21,6 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
             is Rejected -> "rejected"
             is Other -> "other"
             InsecureUrl -> "insecure_url"
+            VpnOff -> "vpn_off"
         }
 }

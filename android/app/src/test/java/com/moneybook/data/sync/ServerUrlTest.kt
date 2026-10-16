@@ -1,6 +1,8 @@
 package com.moneybook.data.sync
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerUrlTest {
@@ -19,6 +21,11 @@ class ServerUrlTest {
         "http://localhost:8095", "http://127.0.0.1:8095", "http://host.ts.net", "http://100.103.137.108.evil.com",
         "http://100.64.0.1@evil.com", "http://999.1.1.1", "ftp://100.64.0.1", "100.64.0.1:8095", "", "https://",
     )
+
+    @Test fun onlyPlainHttpToNonDebugHostsNeedsAVpn() {
+        listOf("http://100.103.137.108:8095", "http://100.64.0.1").forEach { assertTrue(it, ServerUrl.needsVpn(it)) }
+        listOf("https://100.103.137.108", "https://host.ts.net", "http://10.0.2.2:8095", "http://localhost:1", "http://127.0.0.1:9").forEach { assertFalse(it, ServerUrl.needsVpn(it)) }
+    }
 
     @Test fun debugAddsTheEmulatorHosts() {
         check(true, true, "http://10.0.2.2:8095", "http://localhost:8095", "http://127.0.0.1:1234")

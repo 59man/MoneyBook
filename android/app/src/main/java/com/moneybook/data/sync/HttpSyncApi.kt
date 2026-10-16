@@ -26,7 +26,11 @@ import java.net.URL
 import java.net.UnknownHostException
 
 /** [SyncApi] over HttpURLConnection. Refreshes the access token once on a 401 (under a mutex, Ruling 9). */
-class HttpSyncApi(private val device: DeviceSettingsRepository) : SyncApi {
+class HttpSyncApi(
+    private val device: DeviceSettingsRepository,
+    /** Fails closed by default; [com.moneybook.AppContainer] passes the real check. */
+    private val vpn: VpnCheck = VpnCheck { false },
+) : SyncApi {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val refreshLock = Mutex()
 
@@ -99,6 +103,7 @@ class HttpSyncApi(private val device: DeviceSettingsRepository) : SyncApi {
     private suspend fun base(url: String? = null): String {
         val result = (url ?: device.current().serverUrl).trim().trimEnd('/')
         if (!ServerUrl.isAllowed(result, BuildConfig.DEBUG)) throw SyncError.InsecureUrl
+        if (ServerUrl.needsVpn(result) && !vpn.active()) throw SyncError.VpnOff
         return result
     }
 

@@ -17,6 +17,12 @@ object ServerUrl {
         }
     }
 
+    /** True when [url] is plain http to a non-debug host: it may only be used while a VPN is up. */
+    fun needsVpn(url: String): Boolean {
+        val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return false
+        return uri.scheme.equals("http", ignoreCase = true) && uri.host?.lowercase() !in debugHosts
+    }
+
     /** True for an IPv4 literal in 100.64.0.0/10 (100.64.0.0 – 100.127.255.255). */
     private fun isTailscale(host: String): Boolean {
         val p = host.split('.')

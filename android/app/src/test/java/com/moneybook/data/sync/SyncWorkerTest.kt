@@ -37,6 +37,7 @@ class SyncWorkerTest {
     @Test fun offlineAndServerRetry() {
         assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.Offline(null))))
         assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.Server(503))))
+        assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.VpnOff)))
     }
 
     @Test fun otherFailuresDoNotRetry() {
