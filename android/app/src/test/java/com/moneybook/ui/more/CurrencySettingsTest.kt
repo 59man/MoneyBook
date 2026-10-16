@@ -1,5 +1,7 @@
 package com.moneybook.ui.more
 
+import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -123,9 +125,15 @@ class CurrencySettingsTest {
 
         rule.onNodeWithContentDescription("Back").performClick()
         // read the state inside the wait: the new main's display row can land a moment after the main code changes
-        rule.waitUntil(10_000) {
+        try {
+            rule.waitUntil(10_000) {
+                val now = runBlocking { app.container.currencies.current() }
+                rule.onAllNodesWithText("$target (${now.mainSpec.symbol})").fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (e: Throwable) {
             val now = runBlocking { app.container.currencies.current() }
-            rule.onAllNodesWithText("$target (${now.mainSpec.symbol})").fetchSemanticsNodes().isNotEmpty()
+            throw AssertionError("want '$target (${now.mainSpec.symbol})', screen: " +
+                rule.onRoot(useUnmergedTree = true).printToString(), e)
         }
         val cs = runBlocking { app.container.currencies.current() }
         rule.onNodeWithText(cs.spec(old).symbol).assertExists()
