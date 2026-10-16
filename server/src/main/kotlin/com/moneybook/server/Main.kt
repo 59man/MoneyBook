@@ -15,6 +15,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import java.time.Clock
+import java.time.ZoneId
 import javax.sql.DataSource
 import kotlin.system.exitProcess
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +34,12 @@ fun main() {
     migrate(ds)
     prepareAuth(config, ds)
     // listens inside the container's network namespace; access is limited by the source-address rules (AccessRules)
-    embeddedServer(Netty, port = config.port, host = "0.0.0.0") { module(config, ds) }.start(wait = true)
+    val clock = Clock.systemUTC()
+    val backups = BackupService.fromConfig(config, clock)
+    embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
+        module(config, ds, clock, backups = backups)
+        scheduleBackups(backups, clock, ZoneId.systemDefault())
+    }.start(wait = true)
 }
 
 fun Application.module(
@@ -41,6 +47,7 @@ fun Application.module(
     ds: DataSource,
     clock: Clock = Clock.systemUTC(),
     peer: (ApplicationCall) -> String = { it.request.local.remoteAddress },
+    backups: BackupService = BackupService.fromConfig(config, clock),
 ) {
     install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
     installAccessRules(AccessRules(config.trustedNetworks, config.allowedHosts), peer)
@@ -48,7 +55,7 @@ fun Application.module(
     installAuth(config, ds)
     installSync(ds, clock)
     installAttachments(config)
-    installAdmin(config, ds)
+    installAdmin(config, ds, backups)
     install(CallLogging) {
         level = Level.INFO
         // method, path and status only: no query string, headers or bodies

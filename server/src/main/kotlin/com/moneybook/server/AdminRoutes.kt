@@ -26,9 +26,10 @@ import kotlinx.serialization.Serializable
     val devices: List<DeviceStatus>,
     val counts: Counts,
     val lastSyncAt: Long?,
+    val backup: BackupStatus,
 )
 
-fun status(c: Connection, config: Config): StatusDto {
+fun status(c: Connection, config: Config, backups: BackupService): StatusDto {
     val owner = Users.ownerId(c)
     val devices = c.prepareStatement(
         "select device_id, name, (extract(epoch from last_seen) * 1000)::bigint from device where user_id = ? order by last_seen desc, device_id",
@@ -48,6 +49,7 @@ fun status(c: Connection, config: Config): StatusDto {
         devices = devices,
         counts = Counts(counts["txn"] ?: 0, counts["account"] ?: 0, counts["category"] ?: 0, counts["attachment"] ?: 0),
         lastSyncAt = devices.maxOfOrNull { it.lastSeen },
+        backup = backups.status(),
     )
 }
 
@@ -58,7 +60,7 @@ private fun ApplicationCall.noStore() = response.header(HttpHeaders.CacheControl
 private object PageResource
 
 /** The status page at `/` and the JSON routes under `/admin`. The access rules (network, Host, Origin) run before all of it. */
-fun Application.installAdmin(config: Config, ds: DataSource) {
+fun Application.installAdmin(config: Config, ds: DataSource, backups: BackupService) {
     val html = PageResource.javaClass.getResource("/admin/index.html")!!.readText()
     routing {
         get("/") {
@@ -72,12 +74,17 @@ fun Application.installAdmin(config: Config, ds: DataSource) {
         route("/admin") {
             get("/status") {
                 call.noStore()
-                call.respond(io { ds.inTransaction { status(it, config) } })
+                call.respond(io { ds.inTransaction { status(it, config, backups) } })
             }
             post("/key/regenerate") {
                 if (config.apiKey != null) throw ApiException(HttpStatusCode.Conflict, "key_from_env")
                 call.noStore()
-                call.respond(io { ds.inTransaction { c -> Users.regenerateKey(c); status(c, config) } })
+                call.respond(io { ds.inTransaction { c -> Users.regenerateKey(c); status(c, config, backups) } })
+            }
+            post("/backup") {
+                if (!backups.launch(this@installAdmin)) throw ApiException(HttpStatusCode.Conflict, "backup_running")
+                call.noStore()
+                call.respond(HttpStatusCode.Accepted, mapOf("started" to true))
             }
             post("/devices/{deviceId}/remove") {
                 val id = call.parameters["deviceId"]!!
@@ -86,7 +93,7 @@ fun Application.installAdmin(config: Config, ds: DataSource) {
                     io {
                         ds.inTransaction { c ->
                             if (!Users.removeDevice(c, Users.ownerId(c), id)) throw ApiException(HttpStatusCode.NotFound, "not_found")
-                            status(c, config)
+                            status(c, config, backups)
                         }
                     },
                 )

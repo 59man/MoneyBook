@@ -1,5 +1,6 @@
 package com.moneybook.server.testutil
 
+import com.moneybook.server.BackupService
 import com.moneybook.server.Config
 import com.moneybook.server.createDataSource
 import com.moneybook.server.inTransaction
@@ -96,11 +97,12 @@ abstract class PostgresTestBase {
         clock: Clock = Clock.systemUTC(),
         apiKey: String? = API_KEY,
         peer: (ApplicationCall) -> String = { "127.0.0.1" },
+        backups: BackupService? = null,
         extra: Application.() -> Unit = {},
         block: suspend ApplicationTestBuilder.(client: HttpClient) -> Unit,
     ) {
         if (dataSource === ds) prepareAuth(config(apiKey), ds) // what main() does before serving
-        runApp(dataSource, clock, apiKey, peer, extra, block)
+        runApp(dataSource, clock, apiKey, peer, backups, extra, block)
     }
 
     private fun runApp(
@@ -108,11 +110,13 @@ abstract class PostgresTestBase {
         clock: Clock,
         apiKey: String?,
         peer: (ApplicationCall) -> String,
+        backups: BackupService?,
         extra: Application.() -> Unit,
         block: suspend ApplicationTestBuilder.(client: HttpClient) -> Unit,
     ) = testApplication {
         application {
-            module(config(apiKey), dataSource, clock, peer)
+            val cfg = config(apiKey)
+            module(cfg, dataSource, clock, peer, backups ?: BackupService.fromConfig(cfg, clock))
             extra()
         }
         val client = createClient {

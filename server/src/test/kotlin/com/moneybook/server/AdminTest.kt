@@ -201,4 +201,55 @@ class AdminTest : PostgresTestBase() {
         assertEquals(HttpStatusCode.Forbidden, client.get("/").status)
         assertEquals(HttpStatusCode.Forbidden, client.get("/admin/status").status)
     }
+
+    private fun fakeBackups(dump: (java.nio.file.Path) -> Unit = { java.nio.file.Files.writeString(it, "dump") }): BackupService {
+        val root = java.nio.file.Files.createTempDirectory("mb-adm")
+        return BackupService(root.resolve("b"), root.resolve("d"), dump, java.time.Clock.systemUTC(), java.time.ZoneId.of("UTC"))
+    }
+
+    private suspend fun HttpClient.backupStatus(untilIdle: Boolean = true): JsonObject {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (true) {
+            val b = status()["backup"]!!.jsonObject
+            if (!untilIdle || !b["running"]!!.jsonPrimitive.boolean || System.currentTimeMillis() > deadline) return b
+            Thread.sleep(20)
+        }
+    }
+
+    @Test
+    fun `back up now runs once at a time and shows in the status`() {
+        val started = java.util.concurrent.CountDownLatch(1); val release = java.util.concurrent.CountDownLatch(1)
+        val b = fakeBackups { started.countDown(); release.await(); java.nio.file.Files.writeString(it, "dump") }
+        withApp(backups = b) { client ->
+            val r = client.post("/admin/backup")
+            assertEquals(HttpStatusCode.Accepted, r.status)
+            assertEquals("""{"started":true}""", r.bodyAsText())
+            assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            assertTrue(client.backupStatus(untilIdle = false)["running"]!!.jsonPrimitive.boolean)
+            val second = client.post("/admin/backup")
+            assertEquals(HttpStatusCode.Conflict, second.status)
+            assertEquals("backup_running", errorCode(second.bodyAsText()))
+            release.countDown()
+            val done = client.backupStatus()
+            assertFalse(done["running"]!!.jsonPrimitive.boolean)
+            assertTrue(done["lastAt"]!!.jsonPrimitive.long > 0)
+            assertEquals(2, done["files"]!!.jsonArray.size)
+            assertTrue(done["files"]!!.jsonArray[0].jsonPrimitive.content.startsWith("moneybook-"))
+            assertEquals(JsonNull, done["errorCode"])
+        }
+    }
+
+    @Test
+    fun `a failed backup shows its code`() = withApp(backups = fakeBackups { error("boom") }) { client ->
+        assertEquals(HttpStatusCode.Accepted, client.post("/admin/backup").status)
+        val b = client.backupStatus()
+        assertEquals("dump_failed", b["errorCode"]!!.jsonPrimitive.content)
+        assertEquals(0, b["files"]!!.jsonArray.size)
+    }
+
+    @Test
+    fun `a foreign origin cannot start a backup`() = withApp(backups = fakeBackups()) { client ->
+        val r = client.post("/admin/backup") { header(HttpHeaders.Origin, "http://evil.example") }
+        assertEquals(HttpStatusCode.Forbidden, r.status)
+    }
 }
