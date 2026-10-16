@@ -123,6 +123,8 @@ class CurrencySettingsTest {
         waitFor(label)
         assertEquals(1, rule.onAllNodesWithText(label).fetchSemanticsNodes().size)
 
+        // the rate keypad overlay takes every pointer event until it is gone; a Back tap during it is lost (seen on CI)
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("Done").fetchSemanticsNodes().isEmpty() }
         rule.onNodeWithContentDescription("Back").performClick()
         // read the state inside the wait: the new main's display row can land a moment after the main code changes
         try {
