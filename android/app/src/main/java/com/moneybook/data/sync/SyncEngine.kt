@@ -225,7 +225,7 @@ class SyncEngine(
     /**
      * Before pushing: the server must hold a photo before a row naming it arrives. Taken from the rows about to be pushed,
      * not from the table, so a photo attached after the upload can't go out without its file. A rejected file is skipped;
-     * Offline, VpnOff, Unauthorized and Server errors abort the run (Ruling 11).
+     * Offline, VpnOff, Forbidden, Unauthorized and Server errors abort the run (Ruling 11).
      */
     private suspend fun uploadPhotos(changes: List<SyncChange>) {
         val names = changes.filter { it.entity == ATTACHMENT && !it.deleted }.map { it.payload.getValue("fileName").jsonPrimitive.content }
@@ -250,7 +250,7 @@ class SyncEngine(
             try {
                 if (api.getAttachment(name, part) && md5Name(part) == name) part.renameTo(target)
             } catch (e: Exception) {
-                if (e is CancellationException || e is SyncError.Offline || e === SyncError.VpnOff || e === SyncError.Unauthorized) throw e
+                if (e is CancellationException || e is SyncError.Offline || e === SyncError.VpnOff || e === SyncError.Forbidden || e === SyncError.Unauthorized) throw e
             } finally {
                 part.delete()
             }

@@ -50,7 +50,7 @@ class AppContainer(context: Context) {
     /** This phone's own settings (passcode, alarm, quick add); never backed up. */
     val device: DeviceSettingsRepository = DataStoreDeviceSettingsRepository(context.deviceStore)
     val lock = AppLock(device)
-    val syncApi: SyncApi = HttpSyncApi(device, SystemVpnCheck(context))
+    val syncApi: SyncApi = HttpSyncApi(device, vpn = SystemVpnCheck(context))
 
     val reminders = ReminderScheduler(context)
     val quickAdd = QuickAddNotifier(context)

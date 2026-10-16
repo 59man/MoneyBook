@@ -1,5 +1,6 @@
 package com.moneybook.data.sync
 
+import android.net.Network
 import com.moneybook.BuildConfig
 import com.moneybook.data.DeviceSettingsRepository
 import com.moneybook.shared.sync.LoginRequest
@@ -24,13 +25,16 @@ import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URL
+import java.net.URLConnection
 import java.net.UnknownHostException
 
 /** [SyncApi] over HttpURLConnection. Refreshes the access token once on a 401 (under a mutex, Ruling 9). */
 class HttpSyncApi(
     private val device: DeviceSettingsRepository,
+    /** How a plain-http request is opened over the tailnet network the check returned; tests replace it. */
+    private val openOver: (Network, URL) -> URLConnection = { n, u -> n.openConnection(u) },
     /** Fails closed by default; [com.moneybook.AppContainer] passes the real check. */
-    private val vpn: VpnCheck = VpnCheck { false },
+    private val vpn: VpnCheck = VpnCheck { null },
 ) : SyncApi {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val refreshLock = Mutex()
@@ -101,11 +105,14 @@ class HttpSyncApi(
 
     // ---- plumbing ----
 
-    private suspend fun base(url: String? = null): String {
+    /** [network] is set for plain http to a Tailscale address: the socket is bound to it, so it can't leave any other way. */
+    private class Target(val url: String, val network: Network?)
+
+    private suspend fun base(url: String? = null): Target {
         val result = (url ?: device.current().serverUrl).trim().trimEnd('/')
         if (!ServerUrl.isAllowed(result, BuildConfig.DEBUG)) throw SyncError.InsecureUrl
-        if (ServerUrl.needsVpn(result) && !vpn.routesThroughTailnet(URI(result).host.orEmpty())) throw SyncError.VpnOff
-        return result
+        if (!ServerUrl.needsVpn(result)) return Target(result, null)
+        return Target(result, vpn.tailnetFor(URI(result).host.orEmpty()) ?: throw SyncError.VpnOff)
     }
 
     private class Body(val type: String, val length: Long, val write: (java.io.OutputStream) -> Unit)
@@ -124,7 +131,11 @@ class HttpSyncApi(
         } catch (e: SyncError) {
             throw e
         } catch (e: Http) {
-            throw if (e.status >= 500) SyncError.Server(e.status) else SyncError.Rejected(e.status, e.code)
+            throw when {
+                e.status >= 500 -> SyncError.Server(e.status)
+                e.status == 403 && e.code in FORBIDDEN_CODES -> SyncError.Forbidden
+                else -> SyncError.Rejected(e.status, e.code)
+            }
         } catch (e: ConnectException) {
             throw SyncError.Offline(e)
         } catch (e: SocketTimeoutException) {
@@ -188,10 +199,11 @@ class HttpSyncApi(
 
     /** One request. Statuses in [ok] (default any 2xx) go to [onOk]; anything else throws [Http]. */
     private fun <T> exchange(
-        base: String, method: String, path: String, bearer: String?, body: Body?,
+        target: Target, method: String, path: String, bearer: String?, body: Body?,
         ok: Set<Int>? = null, onOk: (HttpURLConnection, Int) -> T,
     ): T {
-        val c = URL(base + path).openConnection() as HttpURLConnection
+        val url = URL(target.url + path)
+        val c = (target.network?.let { openOver(it, url) } ?: url.openConnection()) as HttpURLConnection
         try {
             c.requestMethod = method
             c.connectTimeout = 15_000
@@ -221,5 +233,9 @@ class HttpSyncApi(
         json.parseToJsonElement(text).jsonObject["error"]?.jsonPrimitive?.content.orEmpty()
     } catch (_: Exception) {
         ""
+    }
+
+    private companion object {
+        val FORBIDDEN_CODES = setOf("forbidden_network", "forbidden_host", "forbidden_origin")
     }
 }

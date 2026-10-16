@@ -14,6 +14,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Rule
@@ -175,7 +176,8 @@ class HttpSyncApiTest {
     @Test fun errorMapping() = runBlocking {
         on("/v1/auth/login") { it.reply(200, tokens) }
         var status = 400
-        on("/v1/sync") { it.reply(status, """{"error":"x"}""") }
+        var on403 = "x"
+        on("/v1/sync") { it.reply(status, """{"error":"${if (status == 403) on403 else "x"}"}""") }
         val api = HttpSyncApi(device())
         api.login(url, login)
         suspend fun fail(s: Int): SyncError {
@@ -188,6 +190,13 @@ class HttpSyncApiTest {
         assertEquals("rejected", r.code)
         assertEquals(429, (fail(429) as SyncError.Rejected).status)
         assertEquals(500, (fail(500) as SyncError.Server).status)
+        // the server's access rules: a refused network or host, not an app that is too old
+        for (code in listOf("forbidden_network", "forbidden_host", "forbidden_origin")) {
+            on403 = code
+            assertSame(code, SyncError.Forbidden, fail(403))
+        }
+        on403 = "other"
+        assertEquals(403, (fail(403) as SyncError.Rejected).status)
         assertEquals("server", fail(503).code)
 
         server.stop(0)
@@ -211,7 +220,7 @@ class HttpSyncApiTest {
 
     @Test fun plainHttpToTailscaleNeedsAVpn() = runBlocking {
         var asked = 0
-        val off = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://100.101.102.103:8095", refreshToken = "R"))) { asked++; false }
+        val off = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings(serverUrl = "http://100.101.102.103:8095", refreshToken = "R"))) { asked++; null }
         assertEquals("vpn_off", try { off.login("http://100.101.102.103:8095", login); "" } catch (e: SyncError) { e.code })
         assertEquals("vpn_off", try { off.sync(SyncRequest(0)); "" } catch (e: SyncError) { e.code })
         assertEquals("vpn_off", try { off.attachmentExists("a.jpg"); "" } catch (e: SyncError) { e.code })
@@ -219,9 +228,9 @@ class HttpSyncApiTest {
         // the debug hosts (here the test server on 127.0.0.1) and https never ask
         asked = 0
         on("/v1/auth/login") { it.reply(200, tokens) }
-        HttpSyncApi(device("")) { asked++; false }.login(url, login)
+        HttpSyncApi(device("")) { asked++; null }.login(url, login)
         assertEquals(0, asked)
-        val https = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings())) { asked++; false }
+        val https = HttpSyncApi(FakeDeviceSettingsRepository(DeviceSettings())) { asked++; null }
         assertTrue(try { https.login("https://nonexistent.invalid", login); null } catch (e: SyncError) { e } is SyncError.Offline)
         assertEquals(0, asked)
     }

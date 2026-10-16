@@ -63,6 +63,11 @@ class SyncAccountTest {
         assertEquals("http://10.0.2.2:8095", SyncAccount.normalizeUrl("http://10.0.2.2:8095//"))
         assertEquals("https://host.ts.net", SyncAccount.normalizeUrl("  host.ts.net  "))
         assertEquals("", SyncAccount.normalizeUrl("  "))
+        assertEquals("http://100.101.102.103", SyncAccount.normalizeUrl("100.101.102.103"))
+        assertEquals("http://100.101.102.103:8095", SyncAccount.normalizeUrl(" 100.101.102.103:8095/ "))
+        assertEquals("https://100.1.2.3:8095", SyncAccount.normalizeUrl("100.1.2.3:8095")) // not in 100.64.0.0/10
+        assertEquals("https://10.1.2.3:8095", SyncAccount.normalizeUrl("10.1.2.3:8095"))
+        assertEquals("https://100.101.102.103.evil.com", SyncAccount.normalizeUrl("100.101.102.103.evil.com"))
     }
 
     @Test fun loginRefusesPlainHttpOutsideTailscaleWithoutCallingTheApi() = runBlocking {

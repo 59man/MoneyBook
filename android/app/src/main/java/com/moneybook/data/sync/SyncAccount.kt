@@ -106,10 +106,11 @@ class SyncAccount(
     }
 
     companion object {
-        /** Trimmed, no trailing slashes, `https://` when no scheme was typed. */
+        /** Trimmed, no trailing slashes, `https://` when no scheme was typed (`http://` for a bare Tailscale IPv4, with or without a port). */
         fun normalizeUrl(raw: String): String {
             val t = raw.trim().trimEnd('/')
-            return if (t.isEmpty() || "://" in t) t else "https://$t"
+            if (t.isEmpty() || "://" in t) return t
+            return if (ServerUrl.isTailscale(t.substringBefore(':'))) "http://$t" else "https://$t"
         }
     }
 }

@@ -23,10 +23,10 @@ object ServerUrl {
         return uri.scheme.equals("http", ignoreCase = true) && uri.host?.lowercase() !in debugHosts
     }
 
-    /** True for an IPv4 literal in 100.64.0.0/10 (100.64.0.0 – 100.127.255.255). */
+    /** True for an IPv4 literal in 100.64.0.0/10 (100.64.0.0 – 100.127.255.255). A leading zero is refused: bionic reads `100.064.0.1` as octal, a public address. */
     fun isTailscale(host: String): Boolean {
         val p = host.split('.')
-        if (p.size != 4 || p.any { it.isEmpty() || it.length > 3 || !it.all(Char::isDigit) }) return false
+        if (p.size != 4 || p.any { it.isEmpty() || it.length > 3 || !it.all(Char::isDigit) || (it.length > 1 && it[0] == '0') }) return false
         val n = p.map { it.toInt() }
         return n.all { it in 0..255 } && n[0] == 100 && n[1] in 64..127
     }

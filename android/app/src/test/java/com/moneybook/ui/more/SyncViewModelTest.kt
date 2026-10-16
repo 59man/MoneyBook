@@ -55,6 +55,7 @@ class SyncViewModelTest {
         assertEquals("Use https, or a Tailscale 100.x address", loginErrorText(SyncError.InsecureUrl))
         assertEquals("Can't reach the server", loginErrorText(SyncError.Offline(null)))
         assertEquals("Turn on Tailscale to sync", loginErrorText(SyncError.VpnOff))
+        assertEquals("The server refused this network. Connect through Tailscale.", loginErrorText(SyncError.Forbidden))
         assertEquals("Too many attempts. Try again in a minute.", loginErrorText(SyncError.Rejected(429, "rate_limited")))
         assertEquals("Server error", loginErrorText(SyncError.Server(500)))
         assertEquals("Couldn't log in", loginErrorText(SyncError.Rejected(400, "bad_request")))
@@ -70,6 +71,7 @@ class SyncViewModelTest {
         assertEquals("Sync failed", syncErrorText("other"))
         assertEquals("Use https, or a Tailscale 100.x address", syncErrorText("insecure_url"))
         assertEquals("Turn on Tailscale to sync", syncErrorText(SyncError.VpnOff.code))
+        assertEquals("The server refused this network. Connect through Tailscale.", syncErrorText(SyncError.Forbidden.code))
     }
 
     @Test fun wrongKeyShowsTheErrorAndStaysSignedOut() = runBlocking {

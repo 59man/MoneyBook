@@ -38,6 +38,7 @@ class SyncWorkerTest {
         assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.Offline(null))))
         assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.Server(503))))
         assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.VpnOff)))
+        assertEquals(Result.retry(), run(SyncOutcome.Failure(SyncError.Forbidden))) // stays signed in, tried again later
     }
 
     @Test fun otherFailuresDoNotRetry() {
