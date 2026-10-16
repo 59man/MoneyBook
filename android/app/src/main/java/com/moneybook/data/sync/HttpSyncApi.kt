@@ -22,6 +22,7 @@ import java.net.HttpURLConnection
 import java.net.HttpRetryException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
+import java.net.URI
 import java.net.URL
 import java.net.UnknownHostException
 
@@ -103,7 +104,7 @@ class HttpSyncApi(
     private suspend fun base(url: String? = null): String {
         val result = (url ?: device.current().serverUrl).trim().trimEnd('/')
         if (!ServerUrl.isAllowed(result, BuildConfig.DEBUG)) throw SyncError.InsecureUrl
-        if (ServerUrl.needsVpn(result) && !vpn.active()) throw SyncError.VpnOff
+        if (ServerUrl.needsVpn(result) && !vpn.routesThroughTailnet(URI(result).host.orEmpty())) throw SyncError.VpnOff
         return result
     }
 

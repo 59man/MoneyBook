@@ -24,7 +24,7 @@ object ServerUrl {
     }
 
     /** True for an IPv4 literal in 100.64.0.0/10 (100.64.0.0 – 100.127.255.255). */
-    private fun isTailscale(host: String): Boolean {
+    fun isTailscale(host: String): Boolean {
         val p = host.split('.')
         if (p.size != 4 || p.any { it.isEmpty() || it.length > 3 || !it.all(Char::isDigit) }) return false
         val n = p.map { it.toInt() }
