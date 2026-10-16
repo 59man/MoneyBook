@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MoneyBook server</title>
+<style>
+  :root{color-scheme:light dark;--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--line:#d8d8dc;--acc:#0a7d5a;--bad:#c0392b}
+  @media (prefers-color-scheme:dark){:root{--bg:#121214;--fg:#eee;--mut:#9a9aa0;--line:#33333a;--acc:#35c997;--bad:#ff6b5b}}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif}
+  main{max-width:640px;margin:0 auto;padding:16px}
+  h1{font-size:20px;margin:0 0 4px} h2{font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin:24px 0 6px}
+  .row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+  .mut{color:var(--mut);font-size:14px} .bad{color:var(--bad)} code{word-break:break-all}
+  button{font:inherit;padding:6px 12px;border:1px solid var(--acc);border-radius:6px;background:none;color:var(--acc);cursor:pointer}
+  button[disabled]{opacity:.5;cursor:default}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body><main>
+  <h1>MoneyBook server</h1>
+  <p class="mut">No password: this page is reachable only from your tailnet (trusted networks). Anyone who can open it can see the key.</p>
+
+  <h2>Connect the app</h2>
+  <div class="row"><span>Server URL</span><code id="url"></code></div>
+  <div class="row"><span>API key</span><code id="key"></code></div>
+  <div class="row"><span id="keyNote" class="mut"></span>
+    <span><button id="show">Show</button> <button id="copy">Copy</button> <button id="regen">Regenerate</button></span></div>
+
+  <h2>Devices</h2>
+  <div id="devices"></div>
+
+  <h2>Data</h2>
+  <div class="row"><span>Entries</span><span id="c-txn"></span></div>
+  <div class="row"><span>Accounts</span><span id="c-accounts"></span></div>
+  <div class="row"><span>Categories</span><span id="c-categories"></span></div>
+  <div class="row"><span>Photos</span><span id="c-photos"></span></div>
+  <div class="row"><span>Last sync</span><span id="lastSync"></span></div>
+
+  <h2>Backups</h2>
+  <div class="row"><span>Last backup</span><span id="bk-last"></span></div>
+  <div class="row"><span class="mut" id="bk-files"></span><button id="bk-now">Back up now</button></div>
+  <div class="row bad" id="bk-err" hidden></div>
+
+  <p id="msg" class="bad"></p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let st = null, shown = false, timer = null;
+
+async function call(path, post) {
+  const r = await fetch(path, post ? {method: 'POST'} : {cache: 'no-store'});
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || 'http ' + r.status);
+  return body;
+}
+function when(ms) {
+  if (!ms) return 'never';
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  const rel = s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : Math.floor(s / 86400) + ' d ago';
+  return rel + ' (' + new Date(ms).toLocaleString() + ')';
+}
+function el(tag, text, cls) { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; }
+function showKey() { $('key').textContent = shown ? st.apiKey : '•'.repeat(12); $('show').textContent = shown ? 'Hide' : 'Show'; }
+
+function render(s) {
+  st = s;
+  $('url').textContent = location.origin;
+  showKey();
+  $('keyNote').textContent = s.keyFromEnv ? 'Set in .env (MB_API_KEY)' : '';
+  $('regen').hidden = s.keyFromEnv;
+  const d = $('devices'); d.replaceChildren();
+  if (!s.devices.length) d.append(el('div', 'No device has logged in yet.', 'mut'));
+  for (const dev of s.devices) {
+    const row = el('div', '', 'row'), info = el('div', '');
+    info.append(el('div', dev.name), el('div', dev.deviceId.slice(0, 8) + ' · ' + when(dev.lastSeen), 'mut'));
+    const b = el('button', 'Remove');
+    b.onclick = async () => {
+      if (!confirm('Remove "' + dev.name + '"? It has to log in again.')) return;
+      act(() => call('/admin/devices/' + encodeURIComponent(dev.deviceId) + '/remove', true));
+    };
+    row.append(info, b); d.append(row);
+  }
+  $('c-txn').textContent = s.counts.txn; $('c-accounts').textContent = s.counts.accounts;
+  $('c-categories').textContent = s.counts.categories; $('c-photos').textContent = s.counts.photos;
+  $('lastSync').textContent = when(s.lastSyncAt);
+  const bk = s.backup;           // absent until the server has backups (Task 3 adds the field)
+  $('bk-now').hidden = !bk;
+  if (bk) {
+    $('bk-last').textContent = when(bk.lastAt);
+    $('bk-files').textContent = bk.files.join(', ');
+    $('bk-now').disabled = bk.running; $('bk-now').textContent = bk.running ? 'Backing up…' : 'Back up now';
+    $('bk-err').hidden = !bk.errorCode;
+    if (bk.errorCode) $('bk-err').textContent = 'Last run failed (' + bk.errorCode + ') ' + when(bk.errorAt);
+    clearTimeout(timer); if (bk.running) timer = setTimeout(load, 2000);
+  }
+}
+async function act(f) { try { $('msg').textContent = ''; const r = await f(); if (r && r.devices) render(r); else await load(); } catch (e) { $('msg').textContent = e.message; } }
+async function load() { try { render(await call('/admin/status')); } catch (e) { $('msg').textContent = e.message; } }
+
+$('show').onclick = () => { shown = !shown; showKey(); };
+$('copy').onclick = () => {
+  const t = st.apiKey;
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();   // http://100.x is not a secure context
+};
+$('regen').onclick = () => { if (confirm('Make a new key? Every device has to log in again with it.')) act(() => call('/admin/key/regenerate', true)); };
+$('bk-now').onclick = () => act(async () => { await call('/admin/backup', true); await load(); });
+load();
+</script>
+</body>
+</html>

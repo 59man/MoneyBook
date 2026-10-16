@@ -48,6 +48,7 @@ fun Application.module(
     installAuth(config, ds)
     installSync(ds, clock)
     installAttachments(config)
+    installAdmin(config, ds)
     install(CallLogging) {
         level = Level.INFO
         // method, path and status only: no query string, headers or bodies

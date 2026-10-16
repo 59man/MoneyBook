@@ -49,6 +49,17 @@ object Users {
     fun resolveKey(c: Connection, envKey: String?): String =
         (envKey ?: storedKey(c) ?: randomKey()).also { setKey(c, it) }
 
+    /** A new random key; ends every session (setKey deletes the refresh tokens when the hash changes). */
+    fun regenerateKey(c: Connection): String = randomKey().also { setKey(c, it) }
+
+    /** Removes the device's sessions and its row. False when there was no such device. */
+    fun removeDevice(c: Connection, userId: UUID, deviceId: String): Boolean {
+        c.prepareStatement("delete from refresh_token where user_id = ? and device_id = ?")
+            .use { it.setObject(1, userId); it.setString(2, deviceId); it.executeUpdate() }
+        return c.prepareStatement("delete from device where user_id = ? and device_id = ?")
+            .use { it.setObject(1, userId); it.setString(2, deviceId); it.executeUpdate() } > 0
+    }
+
     /** 32 random bytes as 64 lowercase hex characters. */
     fun randomKey(): String = ByteArray(32).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
 
