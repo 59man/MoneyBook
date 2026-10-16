@@ -122,8 +122,12 @@ class CurrencySettingsTest {
         assertEquals(1, rule.onAllNodesWithText(label).fetchSemanticsNodes().size)
 
         rule.onNodeWithContentDescription("Back").performClick()
+        // read the state inside the wait: the new main's display row can land a moment after the main code changes
+        rule.waitUntil(10_000) {
+            val now = runBlocking { app.container.currencies.current() }
+            rule.onAllNodesWithText("$target (${now.mainSpec.symbol})").fetchSemanticsNodes().isNotEmpty()
+        }
         val cs = runBlocking { app.container.currencies.current() }
-        waitFor("$target (${cs.mainSpec.symbol})")
         rule.onNodeWithText(cs.spec(old).symbol).assertExists()
     }
 }
