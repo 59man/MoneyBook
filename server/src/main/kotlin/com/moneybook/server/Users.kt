@@ -35,6 +35,23 @@ object Users {
         c.prepareStatement("update server_meta set key_hash = ?").use { it.setString(1, keyHash); it.executeUpdate() }
     }
 
+    fun storedKey(c: Connection): String? = c.createStatement().use { st ->
+        st.executeQuery("select api_key from server_meta").use { rs -> if (rs.next()) rs.getString(1) else null }
+    }
+
+    /** Stores the key; a different one than before ends every session (applyKey). */
+    fun setKey(c: Connection, key: String) {
+        applyKey(c, sha256(key).joinToString("") { "%02x".format(it) })
+        c.prepareStatement("update server_meta set api_key = ?").use { it.setString(1, key); it.executeUpdate() }
+    }
+
+    /** env key wins, else the stored one, else a new random key. Stores and returns the effective key. */
+    fun resolveKey(c: Connection, envKey: String?): String =
+        (envKey ?: storedKey(c) ?: randomKey()).also { setKey(c, it) }
+
+    /** 32 random bytes as 64 lowercase hex characters. */
+    fun randomKey(): String = ByteArray(32).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
+
     fun upsertDevice(c: Connection, userId: UUID, deviceId: String, name: String) {
         c.prepareStatement(
             "insert into device (user_id, device_id, name) values (?, ?, ?) " +

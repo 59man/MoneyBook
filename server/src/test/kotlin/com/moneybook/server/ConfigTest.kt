@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ConfigTest {
@@ -14,8 +15,8 @@ class ConfigTest {
         "MB_DB_USER" to "mb",
         "MB_DB_PASSWORD" to password,
         "MB_JWT_SECRET" to secret,
-        "MB_API_KEY" to "k".repeat(32),
     )
+    private val withKey = env + ("MB_API_KEY" to "k".repeat(32))
 
     @Test
     fun `defaults for data dir and port`() {
@@ -35,7 +36,7 @@ class ConfigTest {
 
     @Test
     fun `each required variable is named when missing`() {
-        for (name in env.keys) {
+        for (name in env.keys) { // MB_API_KEY is optional now
             val e = assertFailsWith<IllegalStateException> { Config.fromEnv(env - name) }
             assertTrue(name in e.message!!, "message for $name: ${e.message}")
         }
@@ -65,7 +66,31 @@ class ConfigTest {
     fun `api key of 31 characters is refused and 32 accepted`() {
         val e = assertFailsWith<IllegalStateException> { Config.fromEnv(env + ("MB_API_KEY" to "k".repeat(31))) }
         assertTrue("MB_API_KEY" in e.message!!)
-        Config.fromEnv(env + ("MB_API_KEY" to "k".repeat(32)))
+        assertEquals("k".repeat(32), Config.fromEnv(env + ("MB_API_KEY" to "k".repeat(32))).apiKey)
+    }
+
+    @Test
+    fun `api key may be missing or blank`() {
+        assertNull(Config.fromEnv(env).apiKey)
+        assertNull(Config.fromEnv(env + ("MB_API_KEY" to "  ")).apiKey)
+    }
+
+    @Test
+    fun `trusted networks, allowed hosts and backup dir`() {
+        val d = Config.fromEnv(env)
+        assertEquals(Cidr.DEFAULTS.size, d.trustedNetworks.size)
+        assertTrue(d.allowedHosts.isEmpty())
+        assertEquals("/backups", d.backupDir)
+        assertEquals(Cidr.DEFAULTS.size, Config.fromEnv(env + ("MB_TRUSTED_NETWORKS" to "")).trustedNetworks.size)
+        val c = Config.fromEnv(env + mapOf("MB_TRUSTED_NETWORKS" to "10.0.0.0/8, 192.168.0.0/16", "MB_ALLOWED_HOSTS" to "A.lan, b.lan", "MB_BACKUP_DIR" to "/x"))
+        assertEquals(2, c.trustedNetworks.size)
+        assertTrue(c.trustedNetworks.any { it.contains(ipOrNull("192.168.1.1")!!) })
+        assertFalse(c.trustedNetworks.any { it.contains(ipOrNull("100.100.1.1")!!) })
+        assertEquals(setOf("a.lan", "b.lan"), c.allowedHosts)
+        assertEquals("/x", c.backupDir)
+        val e = assertFailsWith<IllegalStateException> { Config.fromEnv(env + ("MB_TRUSTED_NETWORKS" to "10.0.0.0/8,secret-entry")) }
+        assertTrue("MB_TRUSTED_NETWORKS" in e.message!!)
+        assertFalse("secret-entry" in e.message!!)
     }
 
     @Test
@@ -74,7 +99,7 @@ class ConfigTest {
         val e = assertFailsWith<IllegalStateException> { Config.fromEnv(env + ("MB_JWT_SECRET" to short)) }
         assertFalse(short in e.message!!)
         assertFalse(password in e.message!!)
-        val text = Config.fromEnv(env).toString()
+        val text = Config.fromEnv(withKey).toString()
         assertFalse(secret in text)
         assertFalse("k".repeat(32) in text)
         assertFalse(password in text)

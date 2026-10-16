@@ -42,17 +42,18 @@ fun ApplicationCall.principalIds(): Pair<UUID, String> {
     return UUID.fromString(p.payload.subject) to p.payload.getClaim(JwtService.DEVICE_CLAIM).asString()
 }
 
-/** Startup, before serving: makes sure the owner exists; a changed key ends every session (the key itself is never stored). */
-fun prepareAuth(config: Config, ds: DataSource) = ds.inTransaction { c ->
-    Users.ownerId(c)
-    Users.applyKey(c, sha256(config.apiKey).joinToString("") { "%02x".format(it) })
+/** Startup, before serving: makes sure the owner exists and the effective key is stored; a changed key ends every session. */
+fun prepareAuth(config: Config, ds: DataSource) {
+    ds.inTransaction { c ->
+        Users.ownerId(c)
+        Users.resolveKey(c, config.apiKey)
+    }
 }
 
 private fun parseUuid(s: String?) = runCatching { UUID.fromString(s) }.getOrNull()
 
 fun Application.installAuth(config: Config, ds: DataSource) {
     val jwt = JwtService(config.jwtSecret)
-    val keyDigest = sha256(config.apiKey)
     install(Authentication) {
         jwt(AUTH_PROVIDER) {
             verifier(jwt.verifier)
@@ -87,10 +88,12 @@ fun Application.installAuth(config: Config, ds: DataSource) {
                     ) {
                         throw ApiException(HttpStatusCode.BadRequest, "bad_request")
                     }
-                    // compare fixed-length digests: constant time whatever the length of the given key
-                    if (!MessageDigest.isEqual(sha256(req.apiKey), keyDigest)) throw ApiException(HttpStatusCode.Unauthorized, "invalid_key")
                     val tokens = withContext(Dispatchers.IO) {
                         ds.inTransaction { c ->
+                            // read on every login (a regenerated key applies at once); a missing key never matches.
+                            // Fixed-length digests: constant time whatever the length of the given key
+                            val key = Users.storedKey(c) ?: throw ApiException(HttpStatusCode.Unauthorized, "invalid_key")
+                            if (!MessageDigest.isEqual(sha256(req.apiKey), sha256(key))) throw ApiException(HttpStatusCode.Unauthorized, "invalid_key")
                             val owner = Users.ownerId(c)
                             Users.upsertDevice(c, owner, req.deviceId, req.deviceName)
                             tokenPair(c, jwt, owner, req.deviceId)

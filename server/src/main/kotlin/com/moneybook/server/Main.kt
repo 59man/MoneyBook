@@ -3,6 +3,7 @@ package com.moneybook.server
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -31,12 +32,18 @@ fun main() {
     val ds = createDataSource(config)
     migrate(ds)
     prepareAuth(config, ds)
-    // listens inside the container's network namespace; compose publishes it on the host's loopback only
+    // listens inside the container's network namespace; access is limited by the source-address rules (AccessRules)
     embeddedServer(Netty, port = config.port, host = "0.0.0.0") { module(config, ds) }.start(wait = true)
 }
 
-fun Application.module(config: Config, ds: DataSource, clock: Clock = Clock.systemUTC()) {
+fun Application.module(
+    config: Config,
+    ds: DataSource,
+    clock: Clock = Clock.systemUTC(),
+    peer: (ApplicationCall) -> String = { it.request.local.remoteAddress },
+) {
     install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+    installAccessRules(AccessRules(config.trustedNetworks, config.allowedHosts), peer)
     installErrorPages()
     installAuth(config, ds)
     installSync(ds, clock)

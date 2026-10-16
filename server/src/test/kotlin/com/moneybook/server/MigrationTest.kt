@@ -27,7 +27,7 @@ class MigrationTest : PostgresTestBase() {
         val before = names("select version from flyway_schema_history")
         migrate(ds)
         assertEquals(before, names("select version from flyway_schema_history"))
-        assertEquals(setOf("1", "2", "3"), before)
+        assertEquals(setOf("1", "2", "3", "4"), before)
     }
 
     @Test

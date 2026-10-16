@@ -9,8 +9,12 @@ import com.moneybook.server.prepareAuth
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.header
+import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import java.nio.file.Files
@@ -36,7 +40,7 @@ abstract class PostgresTestBase {
         /** A fixed 48-character API key. */
         const val API_KEY = "test-api-key-0123456789-test-api-key-0123456789-ab"
 
-        fun config(apiKey: String = API_KEY) = Config(
+        fun config(apiKey: String? = API_KEY) = Config(
             dbUrl = container.jdbcUrl,
             dbUser = container.username,
             dbPassword = container.password,
@@ -76,7 +80,10 @@ abstract class PostgresTestBase {
     @Before
     fun truncateTables() {
         ds.inTransaction { c ->
-            c.createStatement().use { it.execute("truncate sync_record, refresh_token, device, app_user") }
+            c.createStatement().use {
+                it.execute("truncate sync_record, refresh_token, device, app_user")
+                it.execute("update server_meta set api_key = null, key_hash = null")
+            }
         }
     }
 
@@ -87,26 +94,32 @@ abstract class PostgresTestBase {
     fun withApp(
         dataSource: DataSource = ds,
         clock: Clock = Clock.systemUTC(),
-        apiKey: String = API_KEY,
+        apiKey: String? = API_KEY,
+        peer: (ApplicationCall) -> String = { "127.0.0.1" },
         extra: Application.() -> Unit = {},
         block: suspend ApplicationTestBuilder.(client: HttpClient) -> Unit,
     ) {
         if (dataSource === ds) prepareAuth(config(apiKey), ds) // what main() does before serving
-        runApp(dataSource, clock, apiKey, extra, block)
+        runApp(dataSource, clock, apiKey, peer, extra, block)
     }
 
     private fun runApp(
         dataSource: DataSource,
         clock: Clock,
-        apiKey: String,
+        apiKey: String?,
+        peer: (ApplicationCall) -> String,
         extra: Application.() -> Unit,
         block: suspend ApplicationTestBuilder.(client: HttpClient) -> Unit,
     ) = testApplication {
         application {
-            module(config(apiKey), dataSource, clock)
+            module(config(apiKey), dataSource, clock, peer)
             extra()
         }
-        val client = createClient { install(ContentNegotiation) { json() } }
+        val client = createClient {
+            install(ContentNegotiation) { json() }
+            // the test engine sends no Host header and the server refuses a missing one; a test's own Host overrides this
+            defaultRequest { header(HttpHeaders.Host, "localhost") }
+        }
         block(client)
     }
 }
