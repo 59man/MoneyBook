@@ -66,7 +66,7 @@ fun Application.installAdmin(config: Config, ds: DataSource, backups: BackupServ
         get("/") {
             call.response.header(
                 "Content-Security-Policy",
-                "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+                "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
             )
             call.noStore()
             call.respondText(html, ContentType.Text.Html)

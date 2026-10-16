@@ -68,6 +68,44 @@ curl -m 5 http://<lan-ip-of-server>:8095/health    # {"status":"ok"} (health is 
 
 If the first command returns the page, stop and check `MB_TRUSTED_NETWORKS` and your Docker version (with an old Docker or a userland proxy the source address may be replaced by the Docker bridge's, which is not trusted by default either; do not add the bridge network to the list).
 
+### Required: block spoofed Tailscale addresses on the Docker host
+
+The rules above trust the source address. Docker publishes the port through NAT, and a machine on your LAN can send packets whose source address is a made-up `100.64.0.0/10` one (a LAN switch does not check it), which would pass as "Tailscale". Close that on the Docker host with one firewall rule that drops anything claiming a Tailscale address that did not arrive through the Tailscale interface:
+
+```bash
+sudo iptables -I DOCKER-USER -s 100.64.0.0/10 ! -i tailscale0 -j DROP
+```
+
+`DOCKER-USER` is where Docker leaves room for your own rules; it is kept when Docker restarts but not across a reboot, so make it permanent with a systemd unit, `/etc/systemd/system/moneybook-firewall.service`:
+
+```ini
+[Unit]
+Description=Drop spoofed Tailscale source addresses before Docker's published ports
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iptables -C DOCKER-USER -s 100.64.0.0/10 ! -i tailscale0 -j DROP 2>/dev/null || iptables -I DOCKER-USER -s 100.64.0.0/10 ! -i tailscale0 -j DROP'
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now moneybook-firewall.service
+sudo iptables -L DOCKER-USER -n -v      # the DROP rule is listed (packet counter grows when something is dropped)
+```
+
+If your Tailscale interface is not called `tailscale0` (`ip link`), use its name. (With nftables only, add an equivalent rule to the forward hook.) Also from the LAN, `curl -m 5 http://<server-lan-ip>:8095/` must still fail as shown above.
+
+Good to know:
+
+- A tool on the Docker host itself that opens `http://127.0.0.1:8095/` arrives through Docker's proxy from the bridge gateway (for example `172.17.0.1`), which is not trusted, so it gets 403. Use the machine's Tailscale address (`http://100.x.y.z:8095/`) or `docker exec moneybook ...`.
+- `/health` is exempt from all checks (it only answers that the server is up).
+- The backups in `./backups` contain the API key in plain text (the database holds it so the page can show it). They are owner-only files in a 700 directory; keep it that way and treat the folder like a password.
+
 ## API key
 
 The server has one owner and no accounts; the app logs in with one API key. Where it comes from:
@@ -99,9 +137,9 @@ Restore replaces the live data, so make sure the backup is the one you want. It 
 docker exec -it moneybook restore /backups/daily/moneybook-<date>.dump /backups/daily/attachments-<date>.tgz
 ```
 
-Type `yes` to continue (`--yes` skips the question). The attachments file is optional. The command checks the files first (a bad file is refused and nothing is touched), stops the server, recreates the database, restores it, replaces the attachments and starts the server again. If a step fails it exits non-zero and the server starts on whatever state exists; fix the cause and run it again (the backup files are not touched).
+Type `yes` to continue (`--yes` skips the question). The attachments file is optional. The command checks the files first (a bad file is refused and nothing is touched), stops the server, restores the dump into a side database, and only when that worked swaps it in (and the attachments with it) and starts the server again. If anything fails it exits non-zero, prints that the live data is unchanged and the server starts again on the old data; fix the cause and run it again (the backup files are not touched). If the restore process is killed, the entrypoint notices the dead lock and starts the server again by itself.
 
-The restore gives the server a new epoch, so phones notice the data went back in time and push all their data again; nothing a phone still holds is lost. It also brings back the API key and refresh tokens of the backup; a device that logged in later signs in again with the key shown on the page. Try it once on test data before you need it.
+The restore gives the server a new epoch, so phones notice the data went back in time and push all their data again; nothing a phone still holds is lost. The API key stays the current one (the backup's key is not brought back), but every device is signed out and logs in again with the key shown on the page. Try it once on test data before you need it.
 
 ## Updating, logs, stopping
 

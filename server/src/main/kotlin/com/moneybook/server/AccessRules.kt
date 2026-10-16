@@ -18,7 +18,7 @@ fun ipOrNull(raw: String): InetAddress? {
         if (!s.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.' }) return null
     } else {
         val p = s.split('.')
-        if (p.size != 4 || p.any { it.isEmpty() || it.length > 3 || !it.all(Char::isDigit) || it.toInt() > 255 }) return null
+        if (p.size != 4 || p.any { it.isEmpty() || it.length > 3 || (it.length > 1 && it[0] == '0') || !it.all(Char::isDigit) || it.toInt() > 255 }) return null
     }
     return runCatching { InetAddress.getByName(s) }.getOrNull() // ::ffff:a.b.c.d comes back as an Inet4Address
 }

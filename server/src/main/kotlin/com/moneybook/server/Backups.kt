@@ -82,7 +82,7 @@ class BackupService(
     }
 
     private fun tar(target: Path) {
-        val p = ProcessBuilder("tar", "czf", target.toString(), "-C", dataDir.toString(), "attachments")
+        val p = ProcessBuilder("tar", "czf", target.toString(), "--exclude=.tmp-*", "-C", dataDir.toString(), "attachments")
             .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
         if (!p.waitFor(10, TimeUnit.MINUTES)) { p.destroyForcibly(); throw BackupFailure("tar_failed") }
         if (p.exitValue() != 0) throw BackupFailure("tar_failed")
@@ -98,8 +98,13 @@ class BackupService(
         for (f in listOf(dumpFile, tgzFile)) {
             val target = dir.resolve(sub).resolve(f.fileName)
             val tmp = dir.resolve(sub).resolve("${f.fileName}.tmp")
-            Files.copy(f, tmp, REPLACE_EXISTING)
-            place(tmp, target)
+            try {
+                Files.copy(f, tmp, REPLACE_EXISTING)
+                place(tmp, target)
+            } catch (e: Exception) {
+                runCatching { Files.deleteIfExists(tmp) }
+                throw e
+            }
         }
     }
 

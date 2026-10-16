@@ -55,4 +55,29 @@ class AccessTest : PostgresTestBase() {
         assertEquals("""{"error":"forbidden_origin"}""", evil.bodyAsText())
         assertEquals(HttpStatusCode.Forbidden, client.post("/admin/anything").status)
     }
+
+    private suspend fun io.ktor.client.HttpClient.key() =
+        Regex("\"apiKey\":\"([0-9a-f]+)\"").find(get("/admin/status").bodyAsText())!!.groupValues[1]
+
+    @Test
+    fun `an encoded admin path does not skip the origin rule`() = withApp(apiKey = null) { client ->
+        val r = client.post("/%61dmin/backup")
+        assertEquals(HttpStatusCode.Forbidden, r.status)
+        assertEquals("""{"error":"forbidden_origin"}""", r.bodyAsText())
+    }
+
+    @Test
+    fun `dot segments under v1 cannot reach the key route`() = withApp(apiKey = null) { client ->
+        val before = client.key()
+        for (path in listOf("/v1/%2e%2e/admin/key/regenerate", "/v1/../admin/key/regenerate")) {
+            client.post(path) { header(HttpHeaders.Origin, "http://evil.example") }
+            assertEquals(HttpStatusCode.NotFound, client.post(path).status, path)
+            assertEquals(before, client.key(), path)
+        }
+    }
+
+    @Test
+    fun `a LAN peer cannot sync`() = withApp(peer = { "192.168.0.7" }) { client ->
+        assertEquals(HttpStatusCode.Forbidden, client.post("/v1/sync").status)
+    }
 }

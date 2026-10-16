@@ -10,7 +10,18 @@ LOCK=/tmp/mb-restore.lock
 PIDFILE=/tmp/mb-app.pid
 export PATH="$PGBIN:$PATH"
 rm -f "$LOCK" "$PIDFILE"
+# a restore killed between its renames: put the old attachments back (the database is repaired below)
+[ -e "$DATA/attachments" ] || [ ! -d "$DATA/.attachments-old" ] || mv "$DATA/.attachments-old" "$DATA/attachments"
 mkdir -p "$DATA/attachments"
+
+# PID 1 ignores signals that have no handler, so the trap goes in before anything is started (docker stop must not wait 10 s)
+pg=""; app=""
+shutdown() {     # SIGTERM to the server, then a fast shutdown (SIGINT) of Postgres
+    trap - TERM INT
+    if [ -n "$app" ]; then kill -TERM "$app" 2>/dev/null || true; wait "$app" 2>/dev/null || true; fi
+    if [ -n "$pg" ]; then kill -INT "$pg" 2>/dev/null || true; wait "$pg" 2>/dev/null || true; fi
+}
+trap 'shutdown; exit 0' TERM INT
 
 # 1. secrets, once
 if [ ! -f "$SECRETS" ]; then
@@ -36,21 +47,16 @@ fi
 # 3. Postgres: loopback and a socket in /tmp only
 postgres -D "$PGDIR" -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp &
 pg=$!
-app=""
 for _ in $(seq 120); do
     pg_isready -q -h 127.0.0.1 && break
     kill -0 "$pg" 2>/dev/null || { echo "postgres did not start" >&2; exit 1; }
     sleep 0.5
 done
 pg_isready -q -h 127.0.0.1 || { echo "postgres not ready" >&2; kill "$pg"; exit 1; }
-psql -d postgres -tAc "select 1 from pg_database where datname = 'moneybook'" | grep -q 1 || createdb moneybook
-
-shutdown() {     # SIGTERM to the server, then a fast shutdown (SIGINT) of Postgres
-    trap - TERM INT
-    if [ -n "$app" ]; then kill -TERM "$app" 2>/dev/null || true; wait "$app" 2>/dev/null || true; fi
-    kill -INT "$pg" 2>/dev/null || true; wait "$pg" 2>/dev/null || true
-}
-trap 'shutdown; exit 0' TERM INT
+hasdb() { psql -d postgres -tAc "select 1 from pg_database where datname = '$1'" | grep -q 1; }
+# a restore killed between its two renames leaves the old database under another name
+if ! hasdb moneybook && hasdb moneybook_old; then psql -d postgres -qc 'alter database moneybook_old rename to moneybook'; fi
+hasdb moneybook || createdb moneybook
 
 start_app() {
     MB_DB_URL=jdbc:postgresql://127.0.0.1:5432/moneybook MB_DB_USER=postgres MB_DATA="$DATA" MB_BACKUP_DIR=/backups \
@@ -65,8 +71,10 @@ while :; do
     wait -n "$pg" "$app" || true
     kill -0 "$pg" 2>/dev/null || { echo "postgres exited" >&2; shutdown; exit 1; }
     kill -0 "$app" 2>/dev/null && continue
-    if [ -e "$LOCK" ]; then
-        while [ -e "$LOCK" ]; do sleep 1; done
+    if [ -L "$LOCK" ]; then
+        # restore holds the lock as a symlink to its pid; a dead pid (restore killed) is a stale lock: take it and go on
+        while [ -L "$LOCK" ] && kill -0 "$(readlink "$LOCK")" 2>/dev/null; do sleep 1; done
+        rm -f "$LOCK"
         start_app
         continue
     fi

@@ -24,7 +24,7 @@ class AccessRulesTest {
 
     @Test
     fun `other peers are refused`() {
-        for (p in listOf("192.168.0.5", "100.63.255.255", "100.128.0.0", "10.0.0.1", "::ffff:192.168.1.5", "fe80::1", "", null, "localhost", "not-an-ip", "999.1.1.1")) {
+        for (p in listOf("192.168.0.5", "100.63.255.255", "100.128.0.0", "10.0.0.1", "::ffff:192.168.1.5", "fe80::1", "", null, "localhost", "not-an-ip", "999.1.1.1", "100.064.0.1", "0100.64.0.1", "100.64.00.1")) {
             assertEquals("forbidden_network", check(p), p.toString())
         }
     }

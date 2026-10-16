@@ -48,7 +48,7 @@ docker compose up -d --build      # use sudo if your user is not in the docker g
 
 Then open `http://<tailscale ip of that machine>:8095/` (for example `http://100.x.y.z:8095/`) in a browser on a device in your tailnet. The page shows the server URL and the API key (with Copy), the devices that sync, how much data the server holds and its backups (with Back up now). In the app open **More, Sync**, enter that URL as Server URL and the key as API key, and log in. The phone needs Tailscale on to sync, at home too. When the server and the phone both hold data you choose to merge them or replace one side. Sync is opt-in, works offline-first and pushes changes in the background.
 
-The server answers only Tailscale and loopback addresses (a device on your LAN gets 403), and the app sends plain http only to a Tailscale address while Tailscale is on. It makes nightly backups (database and photos) and has a tested restore command. See [deploy/README.md](deploy/README.md) for details (trusted networks, the key, backups, restore, updating).
+The server answers only Tailscale and loopback addresses (a device on your LAN gets 403), and the app sends plain http only to a Tailscale address while Tailscale is on. It makes nightly backups (database and photos) and has a tested restore command. On the Docker host add the one firewall rule from [deploy/README.md](deploy/README.md) (it stops a LAN device from faking a Tailscale source address). The backups contain the API key in plain text, so keep that folder private. See [deploy/README.md](deploy/README.md) for details (trusted networks, the key, backups, restore, updating).
 
 ## Build from source
 

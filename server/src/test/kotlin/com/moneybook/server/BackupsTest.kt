@@ -62,6 +62,16 @@ class BackupsTest {
     }
 
     @Test
+    fun `upload temp files are not archived`() {
+        attachments()
+        Files.writeString(data.resolve("attachments/u1/.tmp-123"), "partial")
+        assertTrue(service(TestClock(day("2026-10-14"))).runOnce())
+        val tar = ProcessBuilder("tar", "tzf", dir.resolve("daily/attachments-2026-10-14.tgz").toString()).start()
+        val list = tar.inputStream.readBytes().decodeToString()
+        assertTrue(list.contains("a.jpg")); assertFalse(list.contains(".tmp-"))
+    }
+
+    @Test
     fun `a missing attachments directory still gives a valid tgz`() {
         val s = service(TestClock(day("2026-10-14")))
         assertTrue(s.runOnce())
