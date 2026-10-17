@@ -31,6 +31,8 @@ data class DeviceSettings(
     val biometric: Boolean = true,
     /** Passcode → Request Passcode: seconds in the background before the lock screen shows; 0 is Immediately. */
     val lockDelaySeconds: Int = 0,
+    /** The entry form's account picker: by account group (two panes) instead of one grid (Realbyte's assetGroupFoldInputView). */
+    val accountsGrouped: Boolean = false,
     /** Sync identity and cursor (M4); the access token lives only in memory, inside HttpSyncApi. */
     val deviceId: String = "",
     val serverUrl: String = "",
@@ -73,6 +75,7 @@ class DataStoreDeviceSettingsRepository(private val store: DataStore<Preferences
     private val widgetOpacity = intPreferencesKey("widget_opacity")
     private val biometric = booleanPreferencesKey("biometric")
     private val lockDelaySeconds = intPreferencesKey("lock_delay_seconds")
+    private val accountsGrouped = booleanPreferencesKey("accounts_grouped")
     private val deviceId = stringPreferencesKey("sync_device_id")
     private val serverUrl = stringPreferencesKey("sync_server_url")
     private val refreshToken = stringPreferencesKey("sync_refresh_token")
@@ -90,6 +93,7 @@ class DataStoreDeviceSettingsRepository(private val store: DataStore<Preferences
         widgetBackground = StyleMode.entries.firstOrNull { it.name == p[widgetBackground] } ?: StyleMode.SYSTEM,
         widgetOpacity = p[widgetOpacity] ?: 100,
         biometric = p[biometric] ?: true, lockDelaySeconds = p[lockDelaySeconds] ?: 0,
+        accountsGrouped = p[accountsGrouped] ?: false,
         deviceId = p[deviceId] ?: "", serverUrl = p[serverUrl] ?: "",
         refreshToken = p[refreshToken] ?: "", syncCursor = p[syncCursor] ?: 0, syncEpoch = p[syncEpoch] ?: "",
         lastSyncAt = p[lastSyncAt] ?: 0, lastSyncError = p[lastSyncError] ?: "",
@@ -109,6 +113,7 @@ class DataStoreDeviceSettingsRepository(private val store: DataStore<Preferences
             p[widgetOpacity] = new.widgetOpacity
             p[biometric] = new.biometric
             p[lockDelaySeconds] = new.lockDelaySeconds
+            p[accountsGrouped] = new.accountsGrouped
             p[deviceId] = new.deviceId
             p[serverUrl] = new.serverUrl
             p[refreshToken] = new.refreshToken

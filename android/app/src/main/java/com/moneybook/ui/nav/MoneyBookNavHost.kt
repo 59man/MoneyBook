@@ -122,6 +122,8 @@ fun MoneyBookNavHost(navController: NavHostController = rememberNavController(),
                 // The Edit screen is replaced by the copy form (Back from it returns to the list).
                 onCopy = { id, by -> entry.whenResumed { navController.navigate(EditTxnRoute(copyOf = id, copyBy = by.name)) { popUpTo<EditTxnRoute> { inclusive = true } } } },
                 onOpenSubCurrencies = { entry.whenResumed { navController.navigate(SubCurrencyRoute) } },
+                onOpenAccountsSetting = { entry.whenResumed { navController.navigate(AccountsSettingRoute) } },
+                onOpenCategories = { type -> entry.whenResumed { navController.navigate(CategorySettingRoute(type.name)) } },
             )
         }
         composable<SyncRoute> { entry ->

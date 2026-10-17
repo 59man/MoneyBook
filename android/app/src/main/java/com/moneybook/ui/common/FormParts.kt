@@ -42,10 +42,11 @@ fun FormRow(
     onClick: (() -> Unit)? = null,
     /** Account Info's "Settlement\nDate" and "Payment\nDate" take two lines. */
     labelLines: Int = 1,
+    modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = MbDimens.formRow).height(IntrinsicSize.Min)
+        modifier.fillMaxWidth().heightIn(min = MbDimens.formRow).height(IntrinsicSize.Min)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             // Top padding lowers the text 2 dp toward the underline, as in Realbyte.
             .padding(start = 17.dp, end = 13.dp, top = 4.dp),

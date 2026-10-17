@@ -15,6 +15,7 @@ import com.moneybook.data.SettingsRepository
 import com.moneybook.data.TimeSource
 import com.moneybook.data.TxnRepository
 import com.moneybook.data.db.AccountEntity
+import com.moneybook.data.db.AccountGroupEntity
 import com.moneybook.data.db.BookmarkEntity
 import com.moneybook.data.db.CategoryEntity
 import com.moneybook.data.db.DbTime
@@ -153,6 +154,8 @@ data class EditTxnState(
     /** The live, visible subcategories (both types) for the picker's right pane. */
     val subcategories: List<CategoryEntity> = emptyList(),
     val accounts: List<AccountEntity> = emptyList(),
+    /** The account picker's left pane when it shows accounts by group. */
+    val groups: List<AccountGroupEntity> = emptyList(),
 ) {
     val isNew: Boolean get() = editingId == null
     val isRule: Boolean get() = ruleId != null
@@ -235,37 +238,25 @@ private val _state = MutableStateFlow(EditTxnState(date = initialDate ?: time.to
         original = existing
         val existingFee = source?.takeIf { it.type == TxnType.TRANSFER }?.let { txns.get(feeId(it.id)) }?.takeIf { !it.deleted }
         val existingPhotos = existing?.let { txns.photos(it.id) }.orEmpty()
-        val all = categories.allRows()
-        val byId = all.associateBy { it.id }
-        val subOn = appSettings.subcategory
-        val labels = all.associate { c ->
-            c.id to (c.parentId?.let { p -> if (subOn) "${byId[p]?.name}/${c.name}" else byId[p]?.name.orEmpty() } ?: c.name)
-        }
-        // An entry of a deleted account stays editable: its own accounts are listed whatever their state.
-        val own = listOfNotNull(existing?.accountId, existing?.toAccountId).distinct()
-        val listed = accounts.accounts().filter { !it.hidden || it.id in own }
-        val usable = listed + own.filter { id -> listed.none { it.id == id } }.mapNotNull { accounts.get(it) }
-        val income = categories.top(CategoryType.INCOME)
-        val expense = categories.top(CategoryType.EXPENSE)
+        val lists = readLists(appSettings.subcategory)
         val bookmark = if (existing == null) bookmarkId?.let { bookmarks.get(it) } else null
         val bookmarkCategory = bookmark?.categoryId?.let { categories.get(it) }?.id
         val copiedCategory = copied?.categoryId?.let { categories.get(it) }?.id
         val rule = if (existing == null) ruleId?.let { repeats.get(it) } else null
         val ruleCategory = rule?.categoryId?.let { categories.get(it) }?.id
         _state.update { s ->
-            val base = s.copy(
-                loaded = true, currency = mainCurrency, mainCurrency = mainCurrency, strip = cs.stripSpecs, fx = cs.fx, incomeCategories = income, expenseCategories = expense,
-                categoryLabels = labels, accounts = usable,
-                subcategory = subOn, subcategories = all.filter { it.parentId != null && !it.deleted && !it.hidden }.sortedWith(compareBy({ it.sortOrder }, { it.name })),
+            val base = lists(s).copy(
+                loaded = true, currency = mainCurrency, mainCurrency = mainCurrency, strip = cs.stripSpecs, fx = cs.fx,
                 timeShown = appSettings.timeInput.inForm, inputOrder = appSettings.inputOrder,
             )
+            val usable = base.accounts.map { it.id }.toSet()
             if (existing == null) {
                 val fresh = base.copy(amount = AmountInput.of(0, mainCurrency), panel = firstPanel(appSettings.inputOrder))
                 when {
-                    copied != null -> fromCopy(fresh, copied, copyBy ?: appSettings.copyDateBy, copiedCategory, usable.map { it.id }.toSet(), cs, existingFee)
-                    rule != null -> fromRule(fresh, rule, ruleCategory, usable.map { it.id }.toSet(), cs.spec(rule.currency))
-                    bookmark != null -> fromBookmark(fresh, bookmark, bookmarkCategory, usable.map { it.id }.toSet(), cs.spec(bookmark.currency))
-                    preset != null -> applyPreset(fresh, preset, usable.map { it.id }.toSet(), mainCurrency)
+                    copied != null -> fromCopy(fresh, copied, copyBy ?: appSettings.copyDateBy, copiedCategory, usable, cs, existingFee)
+                    rule != null -> fromRule(fresh, rule, ruleCategory, usable, cs.spec(rule.currency))
+                    bookmark != null -> fromBookmark(fresh, bookmark, bookmarkCategory, usable, cs.spec(bookmark.currency))
+                    preset != null -> applyPreset(fresh, preset, usable, mainCurrency)
                     else -> fresh
                 }
             } else {
@@ -281,6 +272,37 @@ private val _state = MutableStateFlow(EditTxnState(date = initialDate ?: time.to
                     feeCurrency = existingFee?.let { cs.spec(it.currency) } ?: mainCurrency,
                 )
             }
+        }
+    }
+
+    /** The pickers' categories, accounts and account groups. */
+    private suspend fun readLists(subOn: Boolean): (EditTxnState) -> EditTxnState {
+        val all = categories.allRows()
+        val byId = all.associateBy { it.id }
+        val labels = all.associate { c ->
+            c.id to (c.parentId?.let { p -> if (subOn) "${byId[p]?.name}/${c.name}" else byId[p]?.name.orEmpty() } ?: c.name)
+        }
+        // An entry of a deleted account stays editable: its own accounts are listed whatever their state.
+        val own = listOfNotNull(original?.accountId, original?.toAccountId).distinct()
+        val listed = accounts.accounts().filter { !it.hidden || it.id in own }
+        val usable = listed + own.filter { id -> listed.none { it.id == id } }.mapNotNull { accounts.get(it) }
+        val income = categories.top(CategoryType.INCOME)
+        val expense = categories.top(CategoryType.EXPENSE)
+        val groups = accounts.groups()
+        return {
+            it.copy(
+                incomeCategories = income, expenseCategories = expense, categoryLabels = labels, accounts = usable, groups = groups,
+                subcategory = subOn, subcategories = all.filter { c -> c.parentId != null && !c.deleted && !c.hidden }.sortedWith(compareBy({ c -> c.sortOrder }, { c -> c.name })),
+            )
+        }
+    }
+
+    /** Back from the panels' pencil (Accounts Setting, the category list): the pickers show what changed there. */
+    fun refreshLists() {
+        if (!_state.value.loaded) return
+        viewModelScope.launch {
+            val lists = readLists(settings.current().subcategory)
+            _state.update(lists)
         }
     }
 
@@ -403,11 +425,11 @@ private val _state = MutableStateFlow(EditTxnState(date = initialDate ?: time.to
     }
 
     fun closeRateSheet() = _state.update { it.copy(rateSheet = null) }
-    fun onAmountDone() = _state.update { it.copy(panel = nextPanelAfterAmount(it)) }
+    fun onAmountDone() = _state.update { it.copy(panel = nextPanel(it, Panel.AMOUNT)) }
     /** The calculator's DONE: its result replaces the amount. */
     fun setAmount(minor: Long) = edit { it.copy(amount = AmountInput.fromMinor(minor, it.amount.decimals).copy(maxFraction = it.amount.maxFraction)) }
     fun pickCategory(id: String) = edit { s ->
-        s.copy(categoryId = id, panel = if (s.accountId == null) Panel.ACCOUNT else amountIfStillEmpty(s))
+        s.copy(categoryId = id).let { it.copy(panel = nextPanel(it, Panel.CATEGORY)) }
     }
     fun setNote(note: String) {
         edit { it.copy(note = note) }
@@ -443,23 +465,10 @@ private val _state = MutableStateFlow(EditTxnState(date = initialDate ?: time.to
     fun removePhoto(name: String) = edit { it.copy(photos = it.photos - name) }
 
     fun pickAccount(id: String) = edit { s ->
-        if (s.panel == Panel.TO_ACCOUNT) {
-            s.copy(toAccountId = id, panel = amountIfStillEmpty(s))
-        } else {
-            s.copy(
-                accountId = id,
-                panel = when {
-                    s.type == TxnType.TRANSFER && s.toAccountId == null -> Panel.TO_ACCOUNT
-                    s.type != TxnType.TRANSFER && s.inputOrder == InputOrder.ACCOUNT && s.categoryId == null -> Panel.CATEGORY
-                    else -> amountIfStillEmpty(s)
-                },
-            )
-        }
+        val from = if (s.panel == Panel.TO_ACCOUNT) Panel.TO_ACCOUNT else Panel.ACCOUNT
+        val picked = if (from == Panel.TO_ACCOUNT) s.copy(toAccountId = id) else s.copy(accountId = id)
+        picked.copy(panel = nextPanel(picked, from))
     }
-
-    /** From Account: the keypad comes after the pickers while no amount was typed. */
-    private fun amountIfStillEmpty(s: EditTxnState): Panel =
-        if (s.inputOrder == InputOrder.ACCOUNT && s.amount.isEmpty) Panel.AMOUNT else Panel.NONE
 
     /** Photo imports under way (a big one is re-encoded): Save waits for them so the photo is not dropped. */
     private val importsRunning = MutableStateFlow(0)
@@ -706,12 +715,29 @@ private val _state = MutableStateFlow(EditTxnState(date = initialDate ?: time.to
             return null
         }
 
-        fun nextPanelAfterAmount(s: EditTxnState): Panel = when {
-            s.type == TxnType.TRANSFER && s.accountId == null -> Panel.ACCOUNT
-            s.type == TxnType.TRANSFER && s.toAccountId == null -> Panel.TO_ACCOUNT
-            s.type != TxnType.TRANSFER && s.categoryId == null -> Panel.CATEGORY
-            s.type != TxnType.TRANSFER && s.accountId == null -> Panel.ACCOUNT
-            else -> Panel.NONE
+        /** The form's fields with a panel, in screen order (Configuration → Input order). */
+        private fun fieldOrder(s: EditTxnState): List<Panel> {
+            val pickers = when {
+                s.type == TxnType.TRANSFER -> listOf(Panel.ACCOUNT, Panel.TO_ACCOUNT)
+                s.inputOrder == InputOrder.ACCOUNT -> listOf(Panel.ACCOUNT, Panel.CATEGORY)
+                else -> listOf(Panel.CATEGORY, Panel.ACCOUNT)
+            }
+            return if (s.inputOrder == InputOrder.ACCOUNT) pickers + Panel.AMOUNT else listOf(Panel.AMOUNT) + pickers
+        }
+
+        private fun isUnfilled(s: EditTxnState, p: Panel): Boolean = when (p) {
+            Panel.AMOUNT -> s.amount.isEmpty
+            Panel.CATEGORY -> s.categoryId == null
+            Panel.ACCOUNT -> s.accountId == null
+            Panel.TO_ACCOUNT -> s.toAccountId == null
+            else -> false
+        }
+
+        /** After [from] is filled: the next unfilled field below it, else the first unfilled one above it, else none. */
+        fun nextPanel(s: EditTxnState, from: Panel): Panel {
+            val order = fieldOrder(s)
+            val at = order.indexOf(from)
+            return (order.drop(at + 1) + order.take(at)).firstOrNull { isUnfilled(s, it) } ?: Panel.NONE
         }
     }
 }

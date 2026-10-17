@@ -516,6 +516,28 @@ class EditTxnViewModelTest {
         assertEquals(Panel.AMOUNT, vm.state.value.panel)
     }
 
+    @Test fun aPickGoesToTheNextUnfilledFieldWrappingToTheTop() = runTest {
+        val vm = vm().also { it.loaded() }
+        vm.openPanel(Panel.ACCOUNT)
+        vm.pickAccount(cash)
+        assertEquals(Panel.AMOUNT, vm.state.value.panel)
+        vm.type("50")
+        vm.onAmountDone()
+        assertEquals(Panel.CATEGORY, vm.state.value.panel)
+        vm.pickCategory(food)
+        assertEquals(Panel.NONE, vm.state.value.panel)
+    }
+
+    @Test fun transferToAccountFirstAsksForFromThenAmount() = runTest {
+        val vm = vm().also { it.loaded() }
+        vm.setType(TxnType.TRANSFER)
+        vm.openPanel(Panel.TO_ACCOUNT)
+        vm.pickAccount(bank)
+        assertEquals(Panel.AMOUNT, vm.state.value.panel)
+        vm.onAmountDone()
+        assertEquals(Panel.ACCOUNT, vm.state.value.panel)
+    }
+
     @Test fun fromAmountKeepsTheUsualOrder() = runTest {
         val vm = vm()
         assertEquals(Panel.AMOUNT, vm.loaded().panel)

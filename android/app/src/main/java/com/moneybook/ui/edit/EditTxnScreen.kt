@@ -1,5 +1,15 @@
 package com.moneybook.ui.edit
 
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.moneybook.shared.model.CategoryType
+import kotlin.math.roundToInt
 import com.moneybook.data.CopyDateBy
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -131,6 +141,10 @@ fun EditTxnScreen(
     onCopy: (String, CopyDateBy) -> Unit = { _, _ -> },
     /** The keypad's globe (Sub Currency Setting); null hides it. */
     onOpenSubCurrencies: (() -> Unit)? = null,
+    /** The account panel's pencil (Accounts Setting); null hides it. */
+    onOpenAccountsSetting: (() -> Unit)? = null,
+    /** The category panel's pencil (the category list of that type); null hides it. */
+    onOpenCategories: ((CategoryType) -> Unit)? = null,
 ) {
     val c = appContainer()
     val vm: EditTxnViewModel = viewModel {
@@ -153,6 +167,20 @@ fun EditTxnScreen(
     val photos = rememberPhotoSources(c.photos, c.lock, { MAX_PHOTOS - s.photos.size }, vm::addPhoto, vm::beginImport, vm::endImport)
     var viewing by rememberSaveable { mutableStateOf<Int?>(null) }
     val download = rememberPhotoDownload(c.photos, c.lock)
+    val device by c.device.settings.collectAsStateWithLifecycle(null)
+    val scope = rememberCoroutineScope()
+    val scroll = rememberScrollState()
+    // Each panel's row, by its top in the form: an opened picker scrolls its row to the top (Realbyte).
+    val rowTop = remember { mutableStateMapOf<Panel, Int>() }
+    fun Modifier.rowOf(panel: Panel) = onGloballyPositioned { rowTop[panel] = it.positionInParent().y.roundToInt() }
+    val picking = s.panel == Panel.CATEGORY || s.panel == Panel.ACCOUNT || s.panel == Panel.TO_ACCOUNT
+    LaunchedEffect(s.panel) {
+        withFrameNanos { } // the panel takes its space first
+        val top = rowTop[s.panel] ?: return@LaunchedEffect
+        if (picking) scroll.animateScrollTo(top) else if (s.panel == Panel.AMOUNT && top < scroll.value) scroll.animateScrollTo(top)
+    }
+    // Back from the pencil's settings screen: the pickers list what was added, renamed or hidden there.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshLists() }
 
     LaunchedEffect(vm) {
         vm.events.collect { e ->
@@ -175,7 +203,7 @@ fun EditTxnScreen(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().background(Mb.colors.surface).systemBarsPadding().imePadding()) {
             MbTopBar(onBack = onClose, title = { TitleText(if (s.isRule) "Repeat" else typeTitle(s.type)) })
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Column(Modifier.weight(1f).verticalScroll(scroll)) {
                 TypeSegments(s.type, vm::setType)
                 DateRow(
                     s.date, s.time, s.repeat?.label,
@@ -204,25 +232,25 @@ fun EditTxnScreen(
                 val amountRow = @Composable {
                     AmountRows(
                         s, color, onOpen = ::open, onAddFee = { focus.clearFocus(); vm.addFee() }, onRemoveFee = vm::removeFee,
-                        onRate = { focus.clearFocus(); vm.openRateSheet() },
+                        onRate = { focus.clearFocus(); vm.openRateSheet() }, modifier = Modifier.rowOf(Panel.AMOUNT),
                     )
                 }
                 val pickerRows = @Composable {
                     if (s.type == TxnType.TRANSFER) {
-                        FormRow("From", active = s.panel == Panel.ACCOUNT, activeColor = color, onClick = { open(Panel.ACCOUNT) }) {
+                        FormRow("From", active = s.panel == Panel.ACCOUNT, activeColor = color, onClick = { open(Panel.ACCOUNT) }, modifier = Modifier.rowOf(Panel.ACCOUNT)) {
                             ValueText(s.accountName(s.accountId))
                         }
-                        FormRow("To", active = s.panel == Panel.TO_ACCOUNT, activeColor = color, onClick = { open(Panel.TO_ACCOUNT) }) {
+                        FormRow("To", active = s.panel == Panel.TO_ACCOUNT, activeColor = color, onClick = { open(Panel.TO_ACCOUNT) }, modifier = Modifier.rowOf(Panel.TO_ACCOUNT)) {
                             ValueText(s.accountName(s.toAccountId))
                         }
                     } else {
                         val category = @Composable {
-                            FormRow("Category", active = s.panel == Panel.CATEGORY, activeColor = color, onClick = { open(Panel.CATEGORY) }) {
+                            FormRow("Category", active = s.panel == Panel.CATEGORY, activeColor = color, onClick = { open(Panel.CATEGORY) }, modifier = Modifier.rowOf(Panel.CATEGORY)) {
                                 ValueText(s.categoryName)
                             }
                         }
                         val account = @Composable {
-                            FormRow("Account", active = s.panel == Panel.ACCOUNT, activeColor = color, onClick = { open(Panel.ACCOUNT) }) {
+                            FormRow("Account", active = s.panel == Panel.ACCOUNT, activeColor = color, onClick = { open(Panel.ACCOUNT) }, modifier = Modifier.rowOf(Panel.ACCOUNT)) {
                                 ValueText(s.accountName(s.accountId))
                             }
                         }
@@ -255,6 +283,26 @@ fun EditTxnScreen(
                     onDelete = vm::delete, onCopy = { focus.clearFocus(); copying = true }, onBookmark = vm::bookmark,
                     isRule = s.isRule, onStop = { confirmStop = true },
                 )
+                // Room under the form so a picker's row can scroll up to the top.
+                if (picking) Spacer(Modifier.height(MbDimens.pickerPanel))
+            }
+            val headerColor = Mb.colors.keypadHeaderText
+            val categoryEdit: @Composable RowScope.() -> Unit = {
+                onOpenCategories?.let { open ->
+                    IconButtonBox(R.drawable.ic_edit, "Edit categories", {
+                        vm.closePanel(); open(if (s.type == TxnType.INCOME) CategoryType.INCOME else CategoryType.EXPENSE)
+                    }, tint = headerColor)
+                }
+            }
+            val grouped = device?.accountsGrouped == true
+            val accountActions: @Composable RowScope.() -> Unit = {
+                IconButtonBox(
+                    if (grouped) R.drawable.ic_group else R.drawable.ic_ungroup, if (grouped) "Show accounts in a grid" else "Show accounts by group",
+                    { scope.launch { c.device.update { it.copy(accountsGrouped = !it.accountsGrouped) } } }, tint = headerColor,
+                )
+                onOpenAccountsSetting?.let { open ->
+                    IconButtonBox(R.drawable.ic_edit, "Edit accounts", { vm.closePanel(); open() }, tint = headerColor)
+                }
             }
             when (s.panel) {
                 Panel.AMOUNT -> AmountKeypad(
@@ -262,10 +310,15 @@ fun EditTxnScreen(
                     strip = s.strip, selected = s.currency.code, onCurrency = vm::pickCurrency, onGlobe = onOpenSubCurrencies,
                 )
                 Panel.CATEGORY ->
-                    if (s.subcategory) TwoPaneCategoryPanel(s.categories, s.subcategories, s.categoryId, vm::pickCategory, vm::closePanel)
-                    else GridPickerPanel("Category", s.categories.map { it.id to it.name }, vm::pickCategory, vm::closePanel)
-                Panel.ACCOUNT, Panel.TO_ACCOUNT ->
-                    GridPickerPanel("Accounts", s.accounts.filter { !it.hidden }.map { it.id to it.name }, vm::pickAccount, vm::closePanel)
+                    if (s.subcategory) TwoPaneCategoryPanel(s.categories, s.subcategories, s.categoryId, vm::pickCategory, vm::closePanel, categoryEdit)
+                    else GridPickerPanel("Category", s.categories.map { it.id to it.name }, vm::pickCategory, vm::closePanel, categoryEdit)
+                Panel.ACCOUNT, Panel.TO_ACCOUNT -> {
+                    val listed = s.accounts.filter { !it.hidden }
+                    val current = if (s.panel == Panel.TO_ACCOUNT) s.toAccountId else s.accountId
+                    // key: a group picked earlier in the panel is forgotten when it opens for the other account.
+                    if (grouped) key(s.panel) { GroupedAccountPanel(s.groups, listed, current, vm::pickAccount, vm::closePanel, accountActions) }
+                    else GridPickerPanel("Accounts", listed.map { it.id to it.name }, vm::pickAccount, vm::closePanel, accountActions)
+                }
                 Panel.FEE -> AmountKeypad(
                     onKey = vm::onKey, onDone = vm::closePanel, onClose = vm::closePanel, title = "Fees",
                     strip = s.strip, selected = s.feeCurrency.code, onCurrency = vm::pickFeeCurrency, onGlobe = onOpenSubCurrencies,
@@ -327,8 +380,9 @@ internal fun AmountRows(
     onAddFee: () -> Unit,
     onRemoveFee: () -> Unit,
     onRate: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    FormRow("Amount", active = s.panel == Panel.AMOUNT, activeColor = color, onClick = { onOpen(Panel.AMOUNT) }) {
+    FormRow("Amount", active = s.panel == Panel.AMOUNT, activeColor = color, onClick = { onOpen(Panel.AMOUNT) }, modifier = modifier) {
         // The entered amount takes the row; the main amount and the Fees button sit at its right end.
         ValueText(amountText(s), Modifier.weight(1f))
         s.shownMain?.let { FitText(money(it, s.mainCurrency), MbType.formValue, Mb.colors.textTertiary, Modifier.padding(start = 8.dp)) }

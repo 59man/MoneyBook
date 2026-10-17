@@ -27,6 +27,8 @@ object MbDimens {
     val keyHeight = 60.dp
     val currencyStrip = 41.dp
     val pickerCell = 60.dp
+    /** The category/account picker panel, header included (Realbyte's input_root: 350dp). */
+    val pickerPanel = 350.dp
     val listRow = 46.dp
     val listTopGap = 10.dp
     val removeSlot = 60.dp

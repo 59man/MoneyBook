@@ -55,6 +55,8 @@ ICONS = {  # drawable name -> Material Symbol name
     "ic_budget": "contract_edit",
     "ic_photo_camera": "photo_camera",
     "ic_download": "vertical_align_bottom",
+    "ic_ungroup": "auto_awesome_motion",
+    "ic_group": "select_all",
 }
 LAUNCHER_SYMBOL = "account_balance_wallet"
 URL = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/{n}/materialsymbolsoutlined/{n}_wght300_24px.svg"
